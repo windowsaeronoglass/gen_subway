@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>提瓦特轨道交通网 · 原神风格实时导航版</title>
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap');
+
+* { user-select: none; box-sizing: border-box; margin:0; padding:0; }
+body {
+  margin:0; padding:0;
+  font-family: 'Noto Serif SC', 'HYWenHei', 'Microsoft YaHei', serif;
+  background: #0d1b2a;
+  overflow:hidden; height:100vh; display:flex; flex-direction:column;
+}
+
+/* ===== 顶部工具栏 - 原神风格 ===== */
+.toolbar {
+  background: linear-gradient(180deg, rgba(13,27,42,0.95) 0%, rgba(20,40,60,0.9) 100%);
+  color: #e8dcc8;
+  padding: 10px 24px;
+  display:flex; justify-content:space-between; align-items:center;
+  flex-wrap:wrap; gap:12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  z-index:20;
+  border-bottom: 2px solid #c9a96e;
+  position: relative;
+}
+.toolbar::after {
+  content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
+  height: 2px; background: linear-gradient(90deg, transparent, #c9a96e, #f0d78c, #c9a96e, transparent);
+}
+.title { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+.title h1 {
+  margin:0; font-size: 1.35rem; letter-spacing: 3px;
+  color: #f0d78c;
+  text-shadow: 0 2px 8px rgba(201,169,110,0.4), 0 0 30px rgba(201,169,110,0.15);
+  font-weight: 700;
+}
+.title small {
+  font-size: 0.72rem; opacity: 0.7; color: #b8a88a;
+  letter-spacing: 1px;
+}
+.controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.genshin-btn {
+  background: linear-gradient(180deg, #2a4a6a 0%, #1a3048 100%);
+  border: 1.5px solid #c9a96e;
+  color: #e8dcc8;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+  letter-spacing: 1px;
+}
+.genshin-btn::before {
+  content: ''; position: absolute; top:0; left:-100%; width:100%; height:100%;
+  background: linear-gradient(90deg, transparent, rgba(201,169,110,0.2), transparent);
+  transition: left 0.5s;
+}
+.genshin-btn:hover::before { left: 100%; }
+.genshin-btn:hover {
+  border-color: #f0d78c;
+  color: #f0d78c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(201,169,110,0.3);
+}
+.genshin-btn:active { transform: translateY(1px) scale(0.98); }
+.file-label {
+  display: inline-block;
+  background: linear-gradient(180deg, #4a3a2a 0%, #3a2a1a 100%);
+  border-color: #a08060;
+}
+.file-label:hover { border-color: #c9a96e; }
+input#jsonUpload { display: none; }
+
+.clock {
+  background: linear-gradient(135deg, rgba(20,40,60,0.8), rgba(30,50,70,0.6));
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-family: 'Noto Serif SC', monospace;
+  color: #f0d78c;
+  border: 1px solid rgba(201,169,110,0.3);
+  letter-spacing: 1px;
+}
+
+/* ===== 地图容器 ===== */
+#map-container {
+  flex:1; position:relative;
+  background: linear-gradient(135deg, #c4b896 0%, #d4c8a8 50%, #b8a880 100%);
+  overflow:hidden; cursor: grab;
+}
+#map-container:active { cursor: grabbing; }
+svg { display:block; width:100%; height:100%; }
+
+/* ===== 路线规划面板 - 原神风格 ===== */
+.route-panel {
+  position: absolute; top: 70px; left: 20px;
+  width: 380px;
+  background: linear-gradient(180deg, rgba(13,27,42,0.92) 0%, rgba(20,35,50,0.88) 100%);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 2px solid #c9a96e;
+  z-index: 30;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+  color: #e8dcc8;
+  max-height: 58px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.route-panel::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 3px; background: linear-gradient(90deg, #c9a96e, #f0d78c, #c9a96e);
+}
+.route-panel.collapsed { max-height: 58px; }
+.route-panel:not(.collapsed) {
+  max-height: 85vh;
+  animation: panelExpand 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+@keyframes panelExpand {
+  from { opacity: 0.8; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.route-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(201,169,110,0.2);
+}
+.route-header h3 {
+  margin: 0; font-size: 1.05rem;
+  color: #f0d78c;
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+#toggle-route {
+  background: none; border: none;
+  color: #c9a96e; cursor: pointer;
+  font-size: 0.85rem; transition: transform 0.3s;
+}
+.route-panel:not(.collapsed) #toggle-route { transform: rotate(180deg); }
+.route-body {
+  padding: 14px 18px;
+  overflow-y: auto;
+  max-height: calc(85vh - 58px);
+}
+
+.route-inputs {
+  display: flex; gap: 8px; margin-bottom: 14px;
+  flex-wrap: wrap; align-items: center;
+}
+.route-inputs select {
+  flex: 1; min-width: 110px;
+  background: linear-gradient(180deg, #1a3048, #0d1b2a);
+  color: #e8dcc8;
+  border: 1.5px solid #c9a96e;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+}
+.route-inputs select:focus {
+  border-color: #f0d78c;
+  box-shadow: 0 0 12px rgba(201,169,110,0.2);
+}
+.route-inputs select option {
+  background: #1a3048;
+  color: #e8dcc8;
+}
+.route-arrow {
+  color: #c9a96e; font-size: 1.2rem;
+  animation: arrowPulse 2s infinite;
+}
+@keyframes arrowPulse {
+  0%, 100% { opacity: 0.6; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(3px); }
+}
+
+/* ===== 路线结果 ===== */
+.route-summary {
+  display: flex; justify-content: space-around;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(201,169,110,0.15);
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, transparent, rgba(201,169,110,0.05), transparent);
+  border-radius: 12px;
+}
+.summary-item { text-align: center; }
+.summary-item .big {
+  font-size: 1.8rem; font-weight: bold;
+  color: #f0d78c;
+  display: block;
+  text-shadow: 0 2px 8px rgba(201,169,110,0.3);
+}
+.summary-item span {
+  font-size: 1.3rem; font-weight: bold;
+  display: block; color: #e8dcc8;
+}
+.summary-item small {
+  font-size: 0.72rem; opacity: 0.6; color: #b8a88a;
+}
+
+.route-steps {
+  display: flex; flex-direction: column; gap: 0;
+}
+.step {
+  display: flex; gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  position: relative;
+  animation: stepIn 0.3s ease-out both;
+}
+@keyframes stepIn {
+  from { opacity: 0; transform: translateX(-15px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.step-icon {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  position: relative;
+  z-index: 2;
+}
+.step-line-vert {
+  width: 3px;
+  flex-shrink: 0;
+  margin-left: 12px;
+  min-height: 30px;
+  border-radius: 2px;
+  position: relative;
+}
+.step-body { flex: 1; }
+.step-title {
+  font-size: 0.92rem;
+  margin-bottom: 3px;
+  line-height: 1.4;
+  color: #e8dcc8;
+}
+.step-title b { color: #f0d78c; }
+.step-meta {
+  font-size: 0.78rem;
+  opacity: 0.65;
+  color: #b8a88a;
+}
+.step-board .step-icon {
+  background: transparent;
+  border: 3px solid;
+  animation: iconGlow 2s infinite;
+}
+@keyframes iconGlow {
+  0%, 100% { box-shadow: 0 0 5px currentColor; }
+  50% { box-shadow: 0 0 15px currentColor, 0 0 25px currentColor; }
+}
+.step-transfer .step-icon {
+  background: linear-gradient(135deg, #4a3a2a, #3a2a1a);
+  border: 2px solid #c9a96e;
+}
+
+/* ===== 站点弹窗 - 原神风格 ===== */
+.station-popup {
+  position: absolute;
+  background: linear-gradient(180deg, rgba(13,27,42,0.95) 0%, rgba(20,35,50,0.92) 100%);
+  backdrop-filter: blur(20px);
+  border: 2px solid #c9a96e;
+  border-radius: 16px;
+  padding: 0;
+  z-index: 100;
+  min-width: 320px;
+  max-width: 380px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,169,110,0.1);
+  animation: popupIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+  transform-origin: top center;
+  overflow: hidden;
+}
+@keyframes popupIn {
+  from { opacity: 0; transform: scale(0.85) translateY(-20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.popup-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(201,169,110,0.2);
+  display: flex; justify-content: space-between; align-items: center;
+  background: linear-gradient(90deg, rgba(201,169,110,0.1), transparent);
+}
+.popup-title {
+  font-size: 1.15rem;
+  color: #f0d78c;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+.popup-en {
+  font-size: 0.75rem;
+  color: #a09070;
+  margin-top: 2px;
+  font-style: italic;
+}
+.popup-close {
+  background: none; border: none;
+  color: #c9a96e; font-size: 1.3rem;
+  cursor: pointer;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.popup-close:hover {
+  background: rgba(201,169,110,0.15);
+  color: #f0d78c;
+  transform: rotate(90deg);
+}
+.popup-body {
+  padding: 12px 18px 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.popup-section-title {
+  font-size: 0.8rem;
+  color: #c9a96e;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin: 12px 0 8px;
+  padding-left: 8px;
+  border-left: 3px solid #c9a96e;
+}
+.popup-line-item {
+  display: flex; align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.popup-line-item:hover {
+  background: rgba(201,169,110,0.1);
+  transform: translateX(4px);
+}
+.popup-line-badge {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: bold;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.popup-line-info { flex: 1; }
+.popup-line-name {
+  font-size: 0.88rem;
+  color: #e8dcc8;
+  font-weight: 500;
+}
+.popup-line-dir {
+  font-size: 0.72rem;
+  color: #a09070;
+  margin-top: 1px;
+}
+.popup-time {
+  text-align: right;
+  white-space: nowrap;
+}
+.popup-time-badge {
+  background: linear-gradient(135deg, #c9a96e, #a08050);
+  color: #0d1b2a;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: bold;
+  display: inline-block;
+}
+.popup-time-badge.off {
+  background: linear-gradient(135deg, #555, #444);
+  color: #888;
+}
+.popup-time-detail {
+  font-size: 0.68rem;
+  color: #a09070;
+  margin-top: 2px;
+}
+.popup-transfer-tag {
+  display: inline-block;
+  background: linear-gradient(135deg, rgba(201,169,110,0.2), rgba(201,169,110,0.1));
+  color: #f0d78c;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  margin-left: 8px;
+  border: 1px solid rgba(201,169,110,0.3);
+}
+
+/* ===== 线路抽屉 - 原神风格 ===== */
+.line-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 420px;
+  background: linear-gradient(180deg, rgba(13,27,42,0.96) 0%, rgba(20,35,50,0.94) 100%);
+  backdrop-filter: blur(20px);
+  border-left: 3px solid #c9a96e;
+  z-index: 40;
+  transform: translateX(105%);
+  transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+  display: flex; flex-direction: column;
+  color: #e8dcc8;
+  box-shadow: -8px 0 40px rgba(0,0,0,0.5);
+}
+.line-drawer.open {
+  transform: translateX(0);
+  animation: drawerSlide 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+@keyframes drawerSlide {
+  from { transform: translateX(105%); }
+  to { transform: translateX(0); }
+}
+.drawer-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 2px solid rgba(201,169,110,0.2);
+  background: linear-gradient(90deg, rgba(201,169,110,0.08), transparent);
+}
+.drawer-color {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 3px solid #fff;
+  box-shadow: 0 0 15px currentColor, 0 4px 10px rgba(0,0,0,0.3);
+  animation: colorPulse 3s infinite;
+}
+@keyframes colorPulse {
+  0%, 100% { box-shadow: 0 0 15px currentColor; }
+  50% { box-shadow: 0 0 25px currentColor, 0 0 40px currentColor; }
+}
+.drawer-header h3 {
+  margin: 0; flex: 1;
+  font-size: 1.2rem;
+  color: #f0d78c;
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+#close-drawer {
+  background: none; border: none;
+  color: #c9a96e; font-size: 1.4rem;
+  cursor: pointer;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.3s;
+}
+#close-drawer:hover {
+  background: rgba(201,169,110,0.15);
+  color: #f0d78c;
+  transform: rotate(90deg);
+}
+.drawer-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(201,169,110,0.15);
+}
+.tab-btn {
+  flex: 1; background: none; border: none;
+  color: #a09070; padding: 12px;
+  cursor: pointer; font-size: 0.88rem;
+  opacity: 0.7;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s;
+  font-family: inherit;
+  letter-spacing: 1px;
+}
+.tab-btn:hover { opacity: 1; color: #c9a96e; }
+.tab-btn.active {
+  opacity: 1;
+  border-bottom-color: #f0d78c;
+  color: #f0d78c;
+  font-weight: 600;
+  background: linear-gradient(180deg, transparent, rgba(201,169,110,0.05));
+}
+.drawer-content {
+  flex: 1; overflow-y: auto;
+  padding: 8px 0;
+}
+.drawer-footer {
+  padding: 12px 20px;
+  border-top: 1px solid rgba(201,169,110,0.15);
+  font-size: 0.72rem;
+  opacity: 0.7;
+  text-align: center;
+  color: #a09070;
+  background: linear-gradient(90deg, transparent, rgba(201,169,110,0.03), transparent);
+}
+
+/* 抽屉内站点行 */
+.drawer-station-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(201,169,110,0.08);
+  transition: all 0.2s;
+  position: relative;
+}
+.drawer-station-row:hover {
+  background: rgba(201,169,110,0.06);
+}
+.drawer-station-row::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 0;
+  background: #c9a96e;
+  transition: height 0.2s;
+  border-radius: 0 2px 2px 0;
+}
+.drawer-station-row:hover::before { height: 60%; }
+.drawer-station-info { flex: 1; }
+.drawer-station-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #e8dcc8;
+}
+.drawer-station-en {
+  font-size: 0.72rem;
+  color: #a09070;
+  margin-top: 2px;
+  font-style: italic;
+}
+.drawer-station-time {
+  text-align: right; white-space: nowrap; margin-left: 10px;
+}
+.drawer-time-badge {
+  background: linear-gradient(135deg, #c9a96e, #a08050);
+  color: #0d1b2a;
+  padding: 3px 12px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  display: inline-block;
+  box-shadow: 0 2px 8px rgba(201,169,110,0.3);
+}
+.drawer-time-badge.off {
+  background: linear-gradient(135deg, #444, #333);
+  color: #777;
+  box-shadow: none;
+}
+.drawer-time-detail {
+  font-size: 0.7rem;
+  color: #a09070;
+  margin-top: 3px;
+}
+
+/* ===== 图例面板 - 原神风格 ===== */
+.legend-panel {
+  position: fixed; bottom: 24px; right: 24px;
+  background: linear-gradient(180deg, rgba(13,27,42,0.9) 0%, rgba(20,35,50,0.85) 100%);
+  backdrop-filter: blur(12px);
+  padding: 12px 18px;
+  border-radius: 16px;
+  font-size: 0.78rem;
+  color: #e8dcc8;
+  display: flex; gap: 12px;
+  z-index: 25;
+  border: 2px solid #c9a96e;
+  flex-wrap: wrap;
+  max-width: 90vw;
+  overflow-x: auto;
+  align-items: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.legend-item {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  transition: all 0.25s;
+  padding: 6px 10px;
+  border-radius: 10px;
+  user-select: none;
+  border: 1px solid transparent;
+}
+.legend-item:hover {
+  background: rgba(201,169,110,0.12);
+  border-color: rgba(201,169,110,0.3);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 4px 12px rgba(201,169,110,0.15);
+}
+.legend-color {
+  width: 22px; height: 14px;
+  border-radius: 20px;
+  display: inline-block;
+  border: 1px solid rgba(255,255,255,0.3);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.legend-circle {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #333;
+  display: inline-block;
+  border: 1.5px solid rgba(255,255,255,0.4);
+}
+
+/* ===== 空状态 ===== */
+.route-empty {
+  text-align: center; padding: 30px 20px;
+  opacity: 0.6;
+  font-size: 0.9rem;
+  color: #a09070;
+}
+
+/* ===== 加载动画 ===== */
+.loading-ring {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border: 2px solid rgba(201,169,110,0.3);
+  border-top-color: #c9a96e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 滚动条美化 ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(201,169,110,0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(201,169,110,0.5); }
+
+/* ===== 响应式 ===== */
+@media (max-width: 768px) {
+  .route-panel { width: calc(100vw - 32px); left: 16px; }
+  .line-drawer { width: 100vw; }
+  .legend-panel {
+    bottom: 10px; right: 10px; left: 10px;
+    max-width: none; justify-content: center;
+  }
+  .toolbar { padding: 8px 12px; }
+  .title h1 { font-size: 1.1rem; }
+}
+
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="title">
+    <h1>🌟 提瓦特轨道交通网</h1>
+    <small>· 七国联动 · 实时导航 · 提瓦特风格</small>
+  </div>
+  <div class="controls">
+    <button class="genshin-btn" id="zoom-in">➕ 放大</button>
+    <button class="genshin-btn" id="zoom-out">➖ 缩小</button>
+    <button class="genshin-btn" id="reset-view">⟳ 重置</button>
+    <label class="genshin-btn file-label" for="jsonUpload">📂 上传JSON</label>
+    <input type="file" id="jsonUpload" accept=".json">
+    <div class="clock" id="clock">北京时间 --:--:--</div>
+  </div>
+</div>
+
+<div id="route-panel" class="route-panel collapsed">
+  <div class="route-header">
+    <h3>🧭 路线规划</h3>
+    <button id="toggle-route">▼</button>
+  </div>
+  <div class="route-body">
+    <div class="route-inputs">
+      <select id="start-station"><option value="">选择起点</option></select>
+      <span class="route-arrow">→</span>
+      <select id="end-station"><option value="">选择终点</option></select>
+      <button class="genshin-btn" id="search-route">查询</button>
+    </div>
+    <div id="route-result"></div>
+  </div>
+</div>
+
+<div id="map-container"></div>
+
+<!-- 站点弹窗 -->
+<div id="station-popup" class="station-popup" style="display:none;"></div>
+
+<div id="line-drawer" class="line-drawer">
+  <div class="drawer-header">
+    <span id="drawer-color" class="drawer-color"></span>
+    <h3 id="drawer-title">线路详情</h3>
+    <button id="close-drawer">✕</button>
+  </div>
+  <div class="drawer-tabs">
+    <button class="tab-btn active" data-dir="0">往<span id="tab-end-0">--</span></button>
+    <button class="tab-btn" data-dir="1">往<span id="tab-end-1">--</span></button>
+  </div>
+  <div id="drawer-content" class="drawer-content"></div>
+  <div class="drawer-footer">
+    <small>首班 7:00 | 末班 23:00 | 高峰6分 / 平峰10分 / 其他12分 | 站间2分钟</small>
+  </div>
+</div>
+
+<div class="legend-panel" id="legend-panel">
+  <span class="legend-item"><i class="legend-circle" style="background:#2d3748;"></i> 普通站</span>
+  <span class="legend-item"><i class="legend-circle" style="background:#2c3e44;outline:2px solid #ffcd94;"></i> 换乘站</span>
+</div>
+
+<script>
+const defaultSubwayData = {"svgViewBoxZoom": 188.94662109639913, "svgViewBoxMin": {"x": -954.0213763976423, "y": -719.1405942322617}, "images": [], "graph": {"options": {"type": "directed", "multi": true, "allowSelfLoops": true}, "attributes": {}, "nodes": [{"key": "misc_node_ps78zu4JO7", "attributes": {"visible": true, "zIndex": 0, "x": -18.92, "y": 249.05, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 3, "color": ["other", "other", "#f2fb05", "#fff"]}}}, {"key": "stn_jn8tvUk6Nr", "attributes": {"visible": true, "zIndex": 0, "x": 102.98, "y": 229.84, "type": "bjsubway-int", "bjsubway-int": {"names": ["璃月港南", "Li Yue Gang South"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_nH1gIP3nmf", "attributes": {"visible": true, "zIndex": 0, "x": 35.28, "y": 229.84, "type": "bjsubway-int", "bjsubway-int": {"names": ["璃月南站", "Liyuenan Railway Station"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_E_wRaB_3hk", "attributes": {"visible": true, "zIndex": 0, "x": -26.15, "y": 229.84, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["丹砂崖", "Dan Sha Ya"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_8-YrDx7o-A", "attributes": {"visible": true, "zIndex": 0, "x": -73.35, "y": 229.84, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["化城郭", "Gandharva Ville"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_KYUikMqnev", "attributes": {"visible": true, "zIndex": 0, "x": -109.74, "y": 219.04, "type": "bjsubway-int", "bjsubway-int": {"names": ["须弥城", "Sumeru City"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_3Q9gO_J3-d", "attributes": {"visible": true, "zIndex": 0, "x": -109.74, "y": 185.14, "type": "bjsubway-int", "bjsubway-int": {"names": ["须弥城北", "Sumeu City North"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_swTQ82XjyV", "attributes": {"visible": true, "zIndex": 0, "x": -109.74, "y": 132.22, "type": "bjsubway-int", "bjsubway-int": {"names": ["卡萨扎莱宫", "Alcazarzaray"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_afgAsZXrGy", "attributes": {"visible": true, "zIndex": 0, "x": 35.28, "y": 283.32, "type": "bjsubway-int", "bjsubway-int": {"names": ["青虚埔南", "Qing Xu Pu South"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_vtR_zEEcQy", "attributes": {"visible": true, "zIndex": 0, "x": 35.28, "y": 148.03, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["天遒谷", "Tian Qiu Gu"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_aFqfmC3zbV", "attributes": {"visible": true, "zIndex": 0, "x": 35.28, "y": 98.8, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["绝云间", "Jue Yun Jian"], "nameOffsetX": "left", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_xRnWiF1A6v", "attributes": {"visible": true, "zIndex": 0, "x": 88.76, "y": 45.32, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["望舒客栈西", "Wang Shu Hotel West"], "nameOffsetX": "left", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_Y59Lf1yKP-", "attributes": {"visible": true, "zIndex": 0, "x": 154.36, "y": -34.56, "type": "bjsubway-int", "bjsubway-int": {"names": ["石门", "Shi Men"], "nameOffsetX": "left", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_NMmqesYS8L", "attributes": {"visible": true, "zIndex": 0, "x": 191.05, "y": -34.56, "type": "bjsubway-int", "bjsubway-int": {"names": ["晨曦酒庄南", "Dawn Winery South"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_A-lqxj3bqy", "attributes": {"visible": true, "zIndex": 0, "x": 143.76, "y": 189.06, "type": "bjsubway-int", "bjsubway-int": {"names": ["璃月港", "Li Yue Gang"], "nameOffsetX": "left", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_hlPNztneag", "attributes": {"visible": true, "zIndex": 0, "x": 170.57, "y": 147.95, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["瑶光滩", "Yao Guang Tan"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_koEOSKrl4_", "attributes": {"visible": true, "zIndex": 0, "x": 211.73, "y": 106.87, "type": "bjsubway-int", "bjsubway-int": {"names": ["龙脊雪山南", "Dragonspine South"], "nameOffsetX": "left", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_Xxb4sWhe6x", "attributes": {"visible": true, "zIndex": 0, "x": 309.22, "y": 106.87, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["龙脊雪山东", "Dragonspine East"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_eG-mjxgyHY", "attributes": {"visible": true, "zIndex": 0, "x": 308.44, "y": -5.33, "type": "bjsubway-int", "bjsubway-int": {"names": ["龙脊雪山北", "Dragonspine North"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_EwwZ6c3Lw8", "attributes": {"visible": true, "zIndex": 0, "x": 308.26, "y": -72.96, "type": "bjsubway-int", "bjsubway-int": {"names": ["清泉镇", "Springvale"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_4mLB3AkpIU", "attributes": {"visible": true, "zIndex": 0, "x": 308.26, "y": -145.88, "type": "bjsubway-int", "bjsubway-int": {"names": ["蒙德城东站", "Mondstadt East Railway Station"], "nameOffsetX": "right", "nameOffsetY": "bottom", "outOfStation": false, "scale": 1}}}, {"key": "stn_cZnD8rayTh", "attributes": {"visible": true, "zIndex": 0, "x": 335.64, "y": -268.81, "type": "bjsubway-int", "bjsubway-int": {"names": ["望风山地", "Stormbearer Mountains"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "misc_node_BvdD_0mzAB", "attributes": {"visible": true, "zIndex": 0, "x": 323.86, "y": 42.52, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 7, "color": ["other", "other", "#009ee9", "#fff"]}}}, {"key": "misc_node_-KQI6lV5uS", "attributes": {"visible": true, "zIndex": 0, "x": 146.42, "y": 2.39, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 4, "color": ["other", "other", "#a60de1", "#fff"]}}}, {"key": "stn_1uurOkHHGa", "attributes": {"visible": true, "zIndex": 0, "x": 375.89, "y": -5.33, "type": "bjsubway-int", "bjsubway-int": {"names": ["鹰翔海滩南", "Falcon Coast South"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_m8rBdjas9c", "attributes": {"visible": true, "zIndex": 0, "x": 77.19, "y": -34.56, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["奥藏山北", "AoCangShan North"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_eVYJsN0_ow", "attributes": {"visible": true, "zIndex": 0, "x": -45.96, "y": -33.94, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["赤嶂城垣", "Chi Zhang Cheng Yuan"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_z95ew7-zKf", "attributes": {"visible": true, "zIndex": 0, "x": -123.94, "y": -34.56, "type": "bjsubway-int", "bjsubway-int": {"names": ["佩特莉可镇", "Petrichor"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_b41i0Grc8D", "attributes": {"visible": true, "zIndex": 0, "x": -123.94, "y": -145.07, "type": "bjsubway-int", "bjsubway-int": {"names": ["枫丹南站", "Fontaine South Railway Station"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_eAxNZ-_s-t", "attributes": {"visible": true, "zIndex": 0, "x": -123.94, "y": -216.73, "type": "bjsubway-int", "bjsubway-int": {"names": ["厄里那斯", "Elynas"], "nameOffsetX": "right", "nameOffsetY": "bottom", "outOfStation": false, "scale": 1}}}, {"key": "stn_NbY161GRFy", "attributes": {"visible": true, "zIndex": 0, "x": -111.52, "y": -277.67, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["枫丹廷西", "Count of Fontaine West"], "nameOffsetX": "left", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "misc_node_R2SyRnqj1t", "attributes": {"visible": true, "zIndex": 0, "x": -173.91, "y": -262.34, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 5, "color": ["other", "other", "#0bf9fb", "#fff"]}}}, {"key": "stn_I3eyHwmM9v", "attributes": {"visible": true, "zIndex": 0, "x": -162.66, "y": 185.14, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["觉王之殿北", "Fane of Ashvattha North"], "nameOffsetX": "middle", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_BmyImlVcbu", "attributes": {"visible": true, "zIndex": 0, "x": -76.32, "y": 98.8, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["无郁稠林", "Mawtiyima Forest"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_eLn3nWFQQs", "attributes": {"visible": true, "zIndex": 0, "x": -76.32, "y": 40.1, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["沉玉谷南", "Chen Yu Gu South"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_yltp5KSP_V", "attributes": {"visible": true, "zIndex": 0, "x": -76.32, "y": -12.8, "type": "bjsubway-int", "bjsubway-int": {"names": ["宝玦口南", "Bao Jue Kou South"], "nameOffsetX": "right", "nameOffsetY": "bottom", "outOfStation": false, "scale": 1}}}, {"key": "stn_ZShaInPxDk", "attributes": {"visible": true, "zIndex": 0, "x": -76.32, "y": -72.96, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["遗珑埠", "Yi Long Bu"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_tLeZ9W2e4R", "attributes": {"visible": true, "zIndex": 0, "x": -76.32, "y": -124.4, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["柔灯港", "Lumidouce Harbor"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_iW7nvfFvKj", "attributes": {"visible": true, "zIndex": 0, "x": -237.98, "y": 198.61, "type": "bjsubway-int", "bjsubway-int": {"names": ["达马山东", "Da Ma Mountain East"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_8tQqFMTsRm", "attributes": {"visible": true, "zIndex": 0, "x": -335.9, "y": 198.61, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["达马山", "Da Ma Mountain"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_ohZE3sgz8F", "attributes": {"visible": true, "zIndex": 0, "x": -405.74, "y": 198.61, "type": "bjsubway-int", "bjsubway-int": {"names": ["须弥西枢纽", "Sumeru West Hub"], "nameOffsetX": "right", "nameOffsetY": "bottom", "outOfStation": false, "scale": 1}}}, {"key": "stn_Un9znIAElQ", "attributes": {"visible": true, "zIndex": 0, "x": -502.3, "y": 219.04, "type": "bjsubway-int", "bjsubway-int": {"names": ["纳塔西站", "Natlan West Railway Station"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "misc_node_CL6qWagJKS", "attributes": {"visible": true, "zIndex": 0, "x": -118.69, "y": -113.12, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 11, "color": ["other", "other", "#04fe19", "#fff"]}}}, {"key": "stn_QSYo6W1bBv", "attributes": {"visible": true, "zIndex": 0, "x": -534.59, "y": 219.04, "type": "bjsubway-int", "bjsubway-int": {"names": ["回声之子", "Children of Echoes"], "nameOffsetX": "left", "nameOffsetY": "bottom", "outOfStation": false, "scale": 1}}}, {"key": "stn_svL6i66A08", "attributes": {"visible": true, "zIndex": 0, "x": -550.2, "y": 302.24, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["悬木人", "Scions of the Canopy"], "nameOffsetX": "right", "nameOffsetY": "bottom", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_ywRb2JXv_O", "attributes": {"visible": true, "zIndex": 0, "x": -598.34, "y": 282.79, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["圣火竞技场西", "Stadium of the Sacred Flame West"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_2gfn2ZGKKW", "attributes": {"visible": true, "zIndex": 0, "x": -624.5, "y": 256.63, "type": "bjsubway-int", "bjsubway-int": {"names": ["烟谜主", "Master of the Night-Wind"], "nameOffsetX": "left", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_wPckwutUkA", "attributes": {"visible": true, "zIndex": 0, "x": -624.5, "y": 198.61, "type": "bjsubway-int", "bjsubway-int": {"names": ["花羽会", "Flower-Feather Clan"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_4Hz1mlZXyI", "attributes": {"visible": true, "zIndex": 0, "x": -624.5, "y": 170.21, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["历洲路东", "Li Zhou Lu Dong"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_6dHSl7347k", "attributes": {"visible": true, "zIndex": 0, "x": -578.92, "y": 330.96, "type": "bjsubway-int", "bjsubway-int": {"names": ["流泉之众", "People of the Springs"], "nameOffsetX": "right", "nameOffsetY": "bottom", "outOfStation": false, "scale": 1}}}, {"key": "stn_-Y9yJ4Phsd", "attributes": {"visible": true, "zIndex": 0, "x": -623.47, "y": 330.96, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["沃陆之邦", "Collective of Plenty"], "nameOffsetX": "middle", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_Z1kn0-pmYh", "attributes": {"visible": true, "zIndex": 1, "x": -661.76, "y": 282.79, "type": "bjsubway-int", "bjsubway-int": {"names": ["西陆岛", "XI LU Island"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "misc_node_HjLyM92St8", "attributes": {"visible": true, "zIndex": 0, "x": -583.49, "y": 241.51, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 1, "color": ["other", "other", "#f39173", "#fff"]}}}, {"key": "stn_yrY1uQ3Bwf", "attributes": {"visible": true, "zIndex": 0, "x": -308.27, "y": 20.51, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["甘露花海东", "Vourukasha Oasis East"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_eOSF38cNja", "attributes": {"visible": true, "zIndex": 0, "x": -76.32, "y": -282.76, "type": "bjsubway-int", "bjsubway-int": {"names": ["枫丹廷", "Count of fontaine"], "nameOffsetX": "right", "nameOffsetY": "bottom", "outOfStation": false, "scale": 1}}}, {"key": "stn_A2jbMMFfmd", "attributes": {"visible": true, "zIndex": 0, "x": -24.49, "y": -282.76, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["欧庇克莱歌剧院北", "Opera Epiclese North"], "nameOffsetX": "right", "nameOffsetY": "bottom", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_SDV4cZQYuJ", "attributes": {"visible": true, "zIndex": 0, "x": 35.31, "y": -293.09, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["湖中垂柳", "Weeping Willow Of the Lake"], "nameOffsetX": "right", "nameOffsetY": "middle", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_Ew2dMYSIKz", "attributes": {"visible": true, "zIndex": 0, "x": 43.5, "y": -350.75, "type": "bjsubway-int", "bjsubway-int": {"names": ["新枫丹科学院", "New Fontaine Research Institue"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_OYVQU3gyPT", "attributes": {"visible": true, "zIndex": 0, "x": -588.87, "y": 219.04, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["凤凰北路", "Feng Huang Bei Lu"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_yUoXTz7m_U", "attributes": {"visible": true, "zIndex": 0, "x": -633.4, "y": 219.04, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["花羽会南", "Flower-Feather Clan South"], "nameOffsetX": "left", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_32Sjd0opf7", "attributes": {"visible": true, "zIndex": 0, "x": -646.82, "y": 176.29, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["历洲路", "Li Zhou Lu"], "nameOffsetX": "left", "nameOffsetY": "middle", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_u76nYQfyh5", "attributes": {"visible": true, "zIndex": 0, "x": -672.8, "y": 115.6, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["奥奇卡纳塔北", "Ochkanatlan North"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "misc_node_i312hBbwfs", "attributes": {"visible": true, "zIndex": 0, "x": 80.04, "y": -347.67, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 9, "color": ["other", "other", "#ff0000", "#fff"]}}}, {"key": "stn_jSKacdj6LR", "attributes": {"visible": true, "zIndex": 0, "x": 290.28, "y": -180.53, "type": "bjsubway-int", "bjsubway-int": {"names": ["蒙德城", "Mondstadt"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "misc_node_b3GSqNDZat", "attributes": {"visible": true, "zIndex": 0, "x": 241.79, "y": -148.76, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 2, "color": ["other", "other", "#9ac6c7", "#fff"]}}}, {"key": "misc_node_bD7VZbwl0o", "attributes": {"visible": true, "zIndex": 0, "x": -70.73, "y": -169.67, "type": "facilities", "facilities": {"type": "railway"}}}, {"key": "misc_node_iTXpEPmvJv", "attributes": {"visible": true, "zIndex": 0, "x": 354.1, "y": -154.41, "type": "facilities", "facilities": {"type": "railway"}}}, {"key": "misc_node_ghBt5DFuVp", "attributes": {"visible": true, "zIndex": 0, "x": 89.14, "y": 204.55, "type": "facilities", "facilities": {"type": "railway"}}}, {"key": "stn_maKGHmZ81m", "attributes": {"visible": true, "zIndex": 0, "x": 265.59, "y": -216.54, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["风龙废墟南", "Stormterror's Lair South"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_DOLPCpKmnF", "attributes": {"visible": true, "zIndex": 0, "x": 265.59, "y": -268.81, "type": "bjsubway-int", "bjsubway-int": {"names": ["风龙废墟北", "Stormterror's Lair North"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_wBa92qwV-t", "attributes": {"visible": true, "zIndex": 0, "x": 375.89, "y": -160.5, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["千风神殿", "Thousand Winds Temple"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_fAV8m2DaU8", "attributes": {"visible": true, "zIndex": 0, "x": 456.12, "y": 253.77, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["无明砦", "Fort Mumei"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_RDfP0JP9Cf", "attributes": {"visible": true, "zIndex": 0, "x": 571.06, "y": 253.77, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["踏鞴砂", "Tatanasura"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_tjudrHbsAH", "attributes": {"visible": true, "zIndex": 0, "x": 672.93, "y": 253.77, "type": "bjsubway-int", "bjsubway-int": {"names": ["稻妻城南", "Inazuma City South"], "nameOffsetX": "left", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_mKMw_YDDHP", "attributes": {"visible": true, "zIndex": 0, "x": 695.94, "y": 175.36, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["神里屋敷", "Kamisato Eseate"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "misc_node_0cMed9Vwbm", "attributes": {"visible": true, "zIndex": 0, "x": 212.12, "y": -258.98, "type": "bjsubway-num-line-badge", "bjsubway-num-line-badge": {"num": 8, "color": ["other", "other", "#0032a0", "#fff"]}}}, {"key": "stn_9gJwt-90FR", "attributes": {"visible": true, "zIndex": 0, "x": 395.17, "y": -268.81, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["望风角", "Stormbearer Point"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_5AbvB-NPNY", "attributes": {"visible": true, "zIndex": 0, "x": 375.89, "y": -197.75, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["摘星崖", "Starsnatch Cliff"], "nameOffsetX": "right", "nameOffsetY": "middle", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_lD2y1M5wx_", "attributes": {"visible": true, "zIndex": 0, "x": 192.76, "y": -72.96, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["晨曦酒庄", "Dawn Winery"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_Z9OLoOZ0t0", "attributes": {"visible": true, "zIndex": 0, "x": 122.01, "y": -72.96, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["清策庄", "Qing Ce Zhuang"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_YuXucbHwJ0", "attributes": {"visible": true, "zIndex": 0, "x": 86.28, "y": -72.96, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["谷东路", "GuDongLu"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_dkDjUPszKL", "attributes": {"visible": true, "zIndex": 0, "x": -162.66, "y": 132.22, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["桓那兰那北", "Vanarana North"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_AC14jTodLQ", "attributes": {"visible": true, "zIndex": 0, "x": -216.8, "y": 156.93, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["沙漠东", "ShaMoDong"], "nameOffsetX": "left", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_wcrNtEMfpP", "attributes": {"visible": true, "zIndex": 0, "x": -237.98, "y": 267.26, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["圣显厅", "Khaj-Nisut"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_AzBxC6Inpj", "attributes": {"visible": true, "zIndex": 0, "x": -237.98, "y": 313.38, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["丰饶绿洲东", "Sobek Oasis East"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_xuGREWFjKN", "attributes": {"visible": true, "zIndex": 0, "x": -237.98, "y": 365.36, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["沙漠南", "SHAMONAN"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "misc_node_vb3wdlvjdo", "attributes": {"visible": true, "zIndex": 0, "x": 432.83, "y": -239.78, "type": "gzmtr-line-badge", "gzmtr-line-badge": {"names": ["6 号线", "Line 6"], "color": ["other", "other", "#ff8c00", "#fff"], "tram": false, "span": true}}}, {"key": "stn_cxV-zyWocG", "attributes": {"visible": true, "zIndex": 0, "x": -24.49, "y": -304.17, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["茉洁站", "Marcotte Station"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_0BQyZUv7Nz", "attributes": {"visible": true, "zIndex": 0, "x": -24.49, "y": -216.73, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["白淞镇", "Poisson"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_NxK9rf8Aei", "attributes": {"visible": true, "zIndex": 0, "x": -191.86, "y": 267.26, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["喀万驿", "Caravan Ribat"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_R8zY3HOrtE", "attributes": {"visible": true, "zIndex": 0, "x": -155.94, "y": 283.32, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["水天丛林西", "Apam Woods West"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_ZeVKBKi63W", "attributes": {"visible": true, "zIndex": 0, "x": -95.22, "y": 283.32, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["奥摩斯港", "Ornos Port"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_aO8LFMuO09", "attributes": {"visible": true, "zIndex": 0, "x": -26.15, "y": 283.32, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["降魔诸山", "Devantaka Mountain"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_IXeQ0eGlnY", "attributes": {"visible": true, "zIndex": 0, "x": 102.98, "y": 283.32, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["黄金屋", "HuangJinWu"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_-CZpUJqZst", "attributes": {"visible": true, "zIndex": 0, "x": 309.22, "y": 282.93, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["珊瑚宫", "Sangonomiya Shrine"], "nameOffsetX": "left", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_m-HzYsTGWD", "attributes": {"visible": true, "zIndex": 0, "x": 364.62, "y": 283.32, "type": "bjsubway-int", "bjsubway-int": {"names": ["稻妻西站", "Inazuma West Railway Station"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "misc_node_lFX_3IDYHm", "attributes": {"visible": true, "zIndex": 0, "x": -235, "y": 55, "type": "gzmtr-line-badge", "gzmtr-line-badge": {"names": ["10号线", "Line 10"], "color": ["other", "other", "#c87828", "#fff"], "tram": false, "span": true}}}, {"key": "stn_eJYKT3eV3r", "attributes": {"visible": true, "zIndex": 0, "x": 616.79, "y": 165.71, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["离岛", "Ritou"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_8Wa2qRRfaA", "attributes": {"visible": true, "zIndex": 0, "x": 644.86, "y": 193.78, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["绀田村", "Konda Village"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_qRNTD3hIPT", "attributes": {"visible": true, "zIndex": 0, "x": 672.93, "y": 221.85, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["稻妻城", "Inazuma City"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_hMqwe9aqL7", "attributes": {"visible": true, "zIndex": 0, "x": 644.86, "y": 291.45, "type": "bjsubway-int", "bjsubway-int": {"names": ["越石村北", "Koseki Village North"], "nameOffsetX": "right", "nameOffsetY": "top", "outOfStation": false, "scale": 1}}}, {"key": "stn_zUpag3HvAL", "attributes": {"visible": true, "zIndex": 0, "x": 571.06, "y": 291.45, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["踏鞴砂南", "Tatanasura South"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_sbAuDiCwpV", "attributes": {"visible": true, "zIndex": 0, "x": 491.05, "y": 291.45, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["蛇骨矿洞", "Jakotsu Mine"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_aUSvWk-kUw", "attributes": {"visible": true, "zIndex": 0, "x": 411.04, "y": 291.45, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["望泷村", "Bourou Village"], "nameOffsetX": "right", "nameOffsetY": "bottom", "open": true, "construction": false, "scale": 1}}}, {"key": "misc_node_H_oY-nIbJd", "attributes": {"visible": true, "zIndex": 0, "x": 601.46, "y": 205.96, "type": "gzmtr-line-badge", "gzmtr-line-badge": {"names": ["18号线", "Line 18"], "color": ["other", "other", "#beff00", "#fff"], "tram": false, "span": true}}}, {"key": "stn_1_3dm-Afyd", "attributes": {"visible": true, "zIndex": 0, "x": 529.56, "y": 378.85, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["鹤观", "Tsurumi Island"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_bHsJJ0akw7", "attributes": {"visible": true, "zIndex": 0, "x": 616.79, "y": 337.18, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["天云峠", "Amakumo Peak"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_WvYbOmV9P-", "attributes": {"visible": true, "zIndex": 0, "x": -502.3, "y": 250.92, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["隆崛坡", "Tepeacac Temple"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_5icAyelbeg", "attributes": {"visible": true, "zIndex": 0, "x": -550.2, "y": 196.83, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["回声之子北", "Children of Echoes North"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_WN1rK3zI2W", "attributes": {"visible": true, "zIndex": 0, "x": -502.3, "y": 282.79, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["祖遗庙宇", "Ancestral Temple"], "nameOffsetX": "right", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_QdGdEj-rnM", "attributes": {"visible": true, "zIndex": 0, "x": -521.48, "y": 330.96, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["溶水域南", "Ameyalco Waters South"], "nameOffsetX": "right", "nameOffsetY": "bottom", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_yeN3_0Oil8", "attributes": {"visible": true, "zIndex": 0, "x": -654.34, "y": 338.79, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["火山", "Huo Shan Mountain"], "nameOffsetX": "left", "nameOffsetY": "bottom", "open": true, "construction": false, "scale": 1}}}, {"key": "stn_92hg_fxhDD", "attributes": {"visible": true, "zIndex": 0, "x": -661.76, "y": 308.39, "type": "bjsubway-basic", "bjsubway-basic": {"names": ["沃陆之邦西", "Collective of Plenty West"], "nameOffsetX": "left", "nameOffsetY": "top", "open": true, "construction": false, "scale": 1}}}, {"key": "misc_node_1-bLOy9B4o", "attributes": {"visible": true, "zIndex": 0, "x": -454.17, "y": 296.36, "type": "gzmtr-line-badge", "gzmtr-line-badge": {"names": ["12号线", "Line 12"], "color": ["other", "other", "#cc99ff", "#fff"], "tram": false, "span": true}}}], "edges": [{"key": "line_6yPAmD92b8", "source": "stn_jn8tvUk6Nr", "target": "stn_nH1gIP3nmf", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f2fb05", "#fff"]}, "reconcileId": "", "parallelIndex": 0}}, {"key": "line__ZgqEJLE_o", "source": "stn_nH1gIP3nmf", "target": "stn_E_wRaB_3hk", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f2fb05", "#fff"]}, "reconcileId": "", "parallelIndex": 0}}, {"key": "line_xRS6DXNyJR", "source": "stn_E_wRaB_3hk", "target": "stn_8-YrDx7o-A", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f2fb05", "#fff"]}, "reconcileId": "", "parallelIndex": 0}}, {"key": "line_7KDhFSGVcH", "source": "stn_8-YrDx7o-A", "target": "stn_KYUikMqnev", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f2fb05", "#fff"]}, "reconcileId": "", "parallelIndex": 0}}, {"key": "line_nzL8xlid4o", "source": "stn_KYUikMqnev", "target": "stn_3Q9gO_J3-d", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f2fb05", "#fff"]}, "reconcileId": "", "parallelIndex": 0}}, {"key": "line_Axr7etjL6y", "source": "stn_3Q9gO_J3-d", "target": "stn_swTQ82XjyV", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f2fb05", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_xSmk-e06rd", "source": "stn_afgAsZXrGy", "target": "stn_nH1gIP3nmf", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#a60de1", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_g1fE0D5nrD", "source": "stn_nH1gIP3nmf", "target": "stn_vtR_zEEcQy", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#a60de1", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_v8yD2FFX5D", "source": "stn_vtR_zEEcQy", "target": "stn_aFqfmC3zbV", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#a60de1", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_wHpvMoWTMY", "source": "stn_NMmqesYS8L", "target": "stn_Y59Lf1yKP-", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#a60de1", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_0SLOrlCDPv", "source": "stn_Y59Lf1yKP-", "target": "stn_xRnWiF1A6v", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#a60de1", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_GYvDtbkYgl", "source": "stn_xRnWiF1A6v", "target": "stn_aFqfmC3zbV", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#a60de1", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_oyN5fWPDMn", "source": "stn_A-lqxj3bqy", "target": "stn_jn8tvUk6Nr", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Mg-PKwV0cX", "source": "stn_A-lqxj3bqy", "target": "stn_hlPNztneag", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_3y2nzWwu4g", "source": "stn_hlPNztneag", "target": "stn_koEOSKrl4_", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_pFCL6aTawY", "source": "stn_koEOSKrl4_", "target": "stn_Xxb4sWhe6x", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_KJWuv3bdIM", "source": "stn_Xxb4sWhe6x", "target": "stn_eG-mjxgyHY", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_dgtAG6-1UK", "source": "stn_eG-mjxgyHY", "target": "stn_EwwZ6c3Lw8", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_p33Zk1RwmW", "source": "stn_EwwZ6c3Lw8", "target": "stn_4mLB3AkpIU", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_ZaHt6KUKoo", "source": "stn_4mLB3AkpIU", "target": "stn_cZnD8rayTh", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#009ee9", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_6OMF9SgYT1", "source": "stn_1uurOkHHGa", "target": "stn_eG-mjxgyHY", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_3xqz7NkUKy", "source": "stn_eG-mjxgyHY", "target": "stn_NMmqesYS8L", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_GKaioAD3qf", "source": "stn_NMmqesYS8L", "target": "stn_Y59Lf1yKP-", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#a60de1", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_M3OmZd8jR7", "source": "stn_m8rBdjas9c", "target": "stn_Y59Lf1yKP-", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_TSMQ28vcUz", "source": "stn_eVYJsN0_ow", "target": "stn_m8rBdjas9c", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Irs0B962tN", "source": "stn_z95ew7-zKf", "target": "stn_eVYJsN0_ow", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_xyoERMQlrT", "source": "stn_z95ew7-zKf", "target": "stn_b41i0Grc8D", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_iyphpQ2fyt", "source": "stn_b41i0Grc8D", "target": "stn_eAxNZ-_s-t", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_WMvAOuQdTI", "source": "stn_eAxNZ-_s-t", "target": "stn_NbY161GRFy", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_3aQusDy9i0", "source": "stn_Y59Lf1yKP-", "target": "stn_NMmqesYS8L", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 5, "offsetTo": 5, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0bf9fb", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_erLeFSWgx9", "source": "stn_Un9znIAElQ", "target": "stn_ohZE3sgz8F", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 3, "offsetTo": 3, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_yPOlR-6F04", "source": "stn_ohZE3sgz8F", "target": "stn_8tQqFMTsRm", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_4ogySpJLCk", "source": "stn_8tQqFMTsRm", "target": "stn_iW7nvfFvKj", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_u66sLfBFrH", "source": "stn_iW7nvfFvKj", "target": "stn_I3eyHwmM9v", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_S0_bruUSUq", "source": "stn_BmyImlVcbu", "target": "stn_eLn3nWFQQs", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_433JPCaEG6", "source": "stn_yltp5KSP_V", "target": "stn_eLn3nWFQQs", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_9yupfon9_z", "source": "stn_ZShaInPxDk", "target": "stn_tLeZ9W2e4R", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Pd5EM_Wsbe", "source": "stn_Un9znIAElQ", "target": "stn_QSYo6W1bBv", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_8NnVsL_hPs", "source": "stn_QSYo6W1bBv", "target": "stn_svL6i66A08", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_LqdmRQFlx3", "source": "stn_svL6i66A08", "target": "stn_ywRb2JXv_O", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_cVjJdSzo20", "source": "stn_ywRb2JXv_O", "target": "stn_2gfn2ZGKKW", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_pw-ABRxU7N", "source": "stn_2gfn2ZGKKW", "target": "stn_wPckwutUkA", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_OMt071UbpA", "source": "stn_wPckwutUkA", "target": "stn_4Hz1mlZXyI", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Ld8gP1IoHf", "source": "stn_6dHSl7347k", "target": "stn_svL6i66A08", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_N_rNL4HSO0", "source": "stn_6dHSl7347k", "target": "stn_-Y9yJ4Phsd", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_LIKDUpyQcg", "source": "stn_-Y9yJ4Phsd", "target": "stn_Z1kn0-pmYh", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 5, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#f39173", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Ju6LY_ZWT3", "source": "stn_u76nYQfyh5", "target": "stn_32Sjd0opf7", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_IPffmj6qm2", "source": "stn_OYVQU3gyPT", "target": "stn_QSYo6W1bBv", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_QPYwdSRfHF", "source": "stn_ohZE3sgz8F", "target": "stn_QSYo6W1bBv", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Vaq_Ot9mc_", "source": "stn_yUoXTz7m_U", "target": "stn_32Sjd0opf7", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_w0Sc8_TBF5", "source": "stn_yUoXTz7m_U", "target": "stn_OYVQU3gyPT", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_LMhF6ZwfcC", "source": "stn_yrY1uQ3Bwf", "target": "stn_ohZE3sgz8F", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Keqn1kP7TY", "source": "stn_yrY1uQ3Bwf", "target": "stn_eAxNZ-_s-t", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_JVYi_Llc4q", "source": "stn_eOSF38cNja", "target": "stn_eAxNZ-_s-t", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_ZEtTMmYUv6", "source": "stn_eOSF38cNja", "target": "stn_A2jbMMFfmd", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_0k8gt0BsyC", "source": "stn_A2jbMMFfmd", "target": "stn_SDV4cZQYuJ", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_HaFpRFOds0", "source": "stn_Ew2dMYSIKz", "target": "stn_SDV4cZQYuJ", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff0000", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_a-NkCgKe2F", "source": "stn_jSKacdj6LR", "target": "stn_koEOSKrl4_", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#9ac6c7", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_NCMvpYBZUy", "source": "stn_A-lqxj3bqy", "target": "stn_koEOSKrl4_", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#9ac6c7", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_a-TxiuzISu", "source": "stn_A-lqxj3bqy", "target": "stn_KYUikMqnev", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#9ac6c7", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_4WHzU04UEt", "source": "stn_Un9znIAElQ", "target": "stn_KYUikMqnev", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": -3, "offsetTo": -3, "roundCornerFactor": 10}, "style": "single-color", "reconcileId": "", "parallelIndex": -1, "single-color": {"color": ["other", "other", "#9ac6c7", "#fff"]}}}, {"key": "line_fwrfvo8hlJ", "source": "stn_Un9znIAElQ", "target": "stn_eOSF38cNja", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#9ac6c7", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_hTNzfyfBeJ", "source": "stn_maKGHmZ81m", "target": "stn_DOLPCpKmnF", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_i6geQqiyfP", "source": "stn_maKGHmZ81m", "target": "stn_jSKacdj6LR", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_f9_wL7DOVB", "source": "stn_jSKacdj6LR", "target": "stn_wBa92qwV-t", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_9QxhEwWRpc", "source": "stn_wBa92qwV-t", "target": "stn_1uurOkHHGa", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line__tnfvKs1C1", "source": "stn_1uurOkHHGa", "target": "stn_fAV8m2DaU8", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_WwScf4ZIfO", "source": "stn_fAV8m2DaU8", "target": "stn_RDfP0JP9Cf", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_tpVS5gwsl7", "source": "stn_RDfP0JP9Cf", "target": "stn_tjudrHbsAH", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_-z_B9fJSIM", "source": "stn_mKMw_YDDHP", "target": "stn_tjudrHbsAH", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#0032a0", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Y_YMlYmRnK", "source": "stn_yltp5KSP_V", "target": "stn_ZShaInPxDk", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_vqTzezSE-L", "source": "stn_DOLPCpKmnF", "target": "stn_cZnD8rayTh", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_g74yrdEYwB", "source": "stn_cZnD8rayTh", "target": "stn_9gJwt-90FR", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_a-F5dWbG4H", "source": "stn_9gJwt-90FR", "target": "stn_5AbvB-NPNY", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_sTVsxCcswF", "source": "stn_4mLB3AkpIU", "target": "stn_5AbvB-NPNY", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_1V5EJSXNBD", "source": "stn_EwwZ6c3Lw8", "target": "stn_4mLB3AkpIU", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 5, "offsetTo": 5, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_U_vxO-VAKL", "source": "stn_lD2y1M5wx_", "target": "stn_EwwZ6c3Lw8", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_MUejTjyuLP", "source": "stn_lD2y1M5wx_", "target": "stn_Z9OLoOZ0t0", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Oxtj8TzQrH", "source": "stn_Z9OLoOZ0t0", "target": "stn_YuXucbHwJ0", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_VwJjhSROGO", "source": "stn_YuXucbHwJ0", "target": "stn_yltp5KSP_V", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_jMwbUcd2zv", "source": "stn_swTQ82XjyV", "target": "stn_yltp5KSP_V", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_IDnt56wquH", "source": "stn_I3eyHwmM9v", "target": "stn_3Q9gO_J3-d", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_kIxMfzEtd9", "source": "stn_3Q9gO_J3-d", "target": "stn_BmyImlVcbu", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#04fe19", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_x0mmFlONgE", "source": "stn_dkDjUPszKL", "target": "stn_swTQ82XjyV", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_bmpTUJpBOk", "source": "stn_dkDjUPszKL", "target": "stn_AC14jTodLQ", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_AXqNZMCHpk", "source": "stn_iW7nvfFvKj", "target": "stn_AC14jTodLQ", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_nuuXgdETvQ", "source": "stn_iW7nvfFvKj", "target": "stn_wcrNtEMfpP", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_JF5KVBVaMm", "source": "stn_wcrNtEMfpP", "target": "stn_AzBxC6Inpj", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_IQkztwWh4-", "source": "stn_AzBxC6Inpj", "target": "stn_xuGREWFjKN", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#ff8c00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_bdmZJ6q1yp", "source": "stn_Ew2dMYSIKz", "target": "stn_cxV-zyWocG", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_uOUCC28HrS", "source": "stn_cxV-zyWocG", "target": "stn_0BQyZUv7Nz", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_JonMDkr8YH", "source": "stn_0BQyZUv7Nz", "target": "stn_z95ew7-zKf", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line__ftGPYcd6l", "source": "stn_NxK9rf8Aei", "target": "stn_z95ew7-zKf", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_RAT2WVNJGO", "source": "stn_R8zY3HOrtE", "target": "stn_NxK9rf8Aei", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_Lbiu3zHwjw", "source": "stn_R8zY3HOrtE", "target": "stn_ZeVKBKi63W", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_quB-y1CjDe", "source": "stn_ZeVKBKi63W", "target": "stn_aO8LFMuO09", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_OinD9e_pb7", "source": "stn_aO8LFMuO09", "target": "stn_afgAsZXrGy", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_hEY06WrkI3", "source": "stn_afgAsZXrGy", "target": "stn_IXeQ0eGlnY", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_3bryOoVzp3", "source": "stn_IXeQ0eGlnY", "target": "stn_-CZpUJqZst", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_ahT-D7BFLp", "source": "stn_-CZpUJqZst", "target": "stn_m-HzYsTGWD", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_5_7sHVe90E", "source": "stn_eJYKT3eV3r", "target": "stn_8Wa2qRRfaA", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_0kj3PVEp77", "source": "stn_8Wa2qRRfaA", "target": "stn_qRNTD3hIPT", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_8SgxDUQZZ_", "source": "stn_qRNTD3hIPT", "target": "stn_tjudrHbsAH", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_kp-eAPd5FA", "source": "stn_tjudrHbsAH", "target": "stn_hMqwe9aqL7", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_4I_JlaLj9j", "source": "stn_hMqwe9aqL7", "target": "stn_zUpag3HvAL", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_RR2QSlseXE", "source": "stn_zUpag3HvAL", "target": "stn_sbAuDiCwpV", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_XS6bEQVieK", "source": "stn_sbAuDiCwpV", "target": "stn_aUSvWk-kUw", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_CdbS69VYTD", "source": "stn_aUSvWk-kUw", "target": "stn_m-HzYsTGWD", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#beff00", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_-HlUv11-NH", "source": "stn_1_3dm-Afyd", "target": "stn_m-HzYsTGWD", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_ruTaPq6M5n", "source": "stn_1_3dm-Afyd", "target": "stn_bHsJJ0akw7", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_oK7iEfps-7", "source": "stn_hMqwe9aqL7", "target": "stn_bHsJJ0akw7", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#c87828", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_KIdA3akGMZ", "source": "stn_WN1rK3zI2W", "target": "stn_QdGdEj-rnM", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_MbbnEaIhCG", "source": "stn_WN1rK3zI2W", "target": "stn_WvYbOmV9P-", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_x8O9qbOcrJ", "source": "stn_WvYbOmV9P-", "target": "stn_Un9znIAElQ", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_3qqKwRZq8f", "source": "stn_5icAyelbeg", "target": "stn_Un9znIAElQ", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_dS01VR_8Fo", "source": "stn_QdGdEj-rnM", "target": "stn_6dHSl7347k", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_-SY2q2t2e_", "source": "stn_yeN3_0Oil8", "target": "stn_6dHSl7347k", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_STqqywn6VP", "source": "stn_yeN3_0Oil8", "target": "stn_92hg_fxhDD", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_CmSZx0SE4a", "source": "stn_92hg_fxhDD", "target": "stn_Z1kn0-pmYh", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_uBFTtl6JxI", "source": "stn_2gfn2ZGKKW", "target": "stn_Z1kn0-pmYh", "attributes": {"visible": true, "zIndex": 0, "type": "perpendicular", "perpendicular": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 18.33}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_os7DCKFVVn", "source": "stn_2gfn2ZGKKW", "target": "stn_wPckwutUkA", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 5, "offsetTo": 5, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}, {"key": "line_ReeB7-ny2C", "source": "stn_5icAyelbeg", "target": "stn_wPckwutUkA", "attributes": {"visible": true, "zIndex": 0, "type": "diagonal", "diagonal": {"startFrom": "from", "offsetFrom": 0, "offsetTo": 0, "roundCornerFactor": 10}, "style": "single-color", "single-color": {"color": ["other", "other", "#cc99ff", "#fff"]}, "reconcileId": "", "parallelIndex": -1}}]}, "version": 71};
+
+function getEdgeColor(attrs) {
+  if (attrs['single-color']) return attrs['single-color'].color[2];
+  if (attrs['mtr-light-rail']) return attrs['mtr-light-rail'].color[2];
+  return '#aaaaaa';
+}
+function getNodeName(node) {
+  const attr = node.attributes || node;
+  const type = attr.type;
+  const conf = attr[type] || attr['bjsubway-int'] || attr['bjsubway-basic'] || attr['shmetro-basic'] || {};
+  return conf.names || ['未知道站', ''];
+}
+function getBeijingNow() {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc + 3600000 * 8);
+}
+function getInterval(hour) {
+  if ((hour >= 7 && hour < 9) || (hour >= 17 && hour < 19)) return 6;
+  if ((hour >= 9 && hour < 17) || (hour >= 19 && hour < 21)) return 10;
+  if (hour >= 21 && hour < 23) return 12;
+  return null;
+}
+function formatTime(minutes) {
+  const h = Math.floor(minutes / 60) % 24;
+  const m = Math.floor(minutes % 60);
+  return (h<10?'0':'') + h + ':' + (m<10?'0':'') + m;
+}
+
+// ===== 单程线配置 =====
+const ONE_WAY_LINES = {
+  '#f39173': { start: 'stn_Un9znIAElQ', name: '1号线' },   // 纳塔西站始发
+  '#9ac6c7': { start: 'stn_jSKacdj6LR', name: '2号线' }     // 蒙德城始发
+};
+
+function isOneWayLine(color) {
+  return !!ONE_WAY_LINES[color];
+}
+
+function getOneWayStart(color) {
+  return ONE_WAY_LINES[color]?.start;
+}
+
+function buildGraph(subwayData) {
+  const nodes = subwayData.graph.nodes.filter(n => n.attributes.visible);
+  const edges = subwayData.graph.edges.filter(e => e.attributes.visible);
+  const nodeMap = {};
+  const stationLines = {};
+  const adj = {};
+  nodes.forEach(n => { nodeMap[n.key] = n.attributes; adj[n.key] = []; });
+  edges.forEach(e => {
+    const c = getEdgeColor(e.attributes);
+    if (!c) return;
+    if (!stationLines[e.source]) stationLines[e.source] = new Set();
+    if (!stationLines[e.target]) stationLines[e.target] = new Set();
+    stationLines[e.source].add(c);
+    stationLines[e.target].add(c);
+    adj[e.source].push({node: e.target, color: c, edge: e});
+    adj[e.target].push({node: e.source, color: c, edge: e});
+  });
+
+  const colorEdges = {};
+  edges.forEach(e => {
+    const c = getEdgeColor(e.attributes);
+    if (!colorEdges[c]) colorEdges[c] = [];
+    colorEdges[c].push(e);
+  });
+  const lineSequences = {};
+  const lineNameMap = {};
+  const lineBadgeMap = {};
+  nodes.forEach(n => {
+    const t = n.attributes.type;
+    if (t === 'bjsubway-num-line-badge' || t === 'berlin-s-bahn-line-badge') {
+      const badge = n.attributes[t];
+      if (badge && badge.color) { lineNameMap[badge.color[2]] = badge.num + '号线'; lineBadgeMap[badge.color[2]] = badge; }
+    } else if (t === 'gzmtr-line-badge') {
+      const badge = n.attributes[t];
+      if (badge && badge.color) { lineNameMap[badge.color[2]] = badge.names[0]; lineBadgeMap[badge.color[2]] = badge; }
+    }
+  });
+
+  for (const [color, es] of Object.entries(colorEdges)) {
+    const localAdj = {};
+    es.forEach(e => {
+      if (!localAdj[e.source]) localAdj[e.source] = [];
+      if (!localAdj[e.target]) localAdj[e.target] = [];
+      localAdj[e.source].push(e.target);
+      localAdj[e.target].push(e.source);
+    });
+
+    // 单程线处理：从始发站单向遍历
+    if (isOneWayLine(color)) {
+      const startKey = getOneWayStart(color);
+      const seq = [];
+      const visited = new Set();
+      let cur = startKey;
+      while (cur) {
+        seq.push(cur);
+        visited.add(cur);
+        const nexts = localAdj[cur].filter(n => !visited.has(n));
+        cur = nexts[0] || null;
+      }
+      lineSequences[color] = seq;
+    } else {
+      // 普通双向线：找端点
+      const degrees = {};
+      Object.entries(localAdj).forEach(([k,v]) => degrees[k] = v.length);
+      const ends = Object.entries(degrees).filter(([k,v]) => v === 1).map(([k]) => k);
+      let seq = [];
+      if (ends.length >= 2) {
+        const start = ends[0];
+        const visited = new Set();
+        let cur = start;
+        while (cur) {
+          seq.push(cur);
+          visited.add(cur);
+          const nexts = localAdj[cur].filter(n => !visited.has(n));
+          cur = nexts[0] || null;
+        }
+      } else if (ends.length === 0 && es.length > 0) {
+        const start = es[0].source;
+        const visited = new Set();
+        let cur = start;
+        while (cur) {
+          seq.push(cur);
+          visited.add(cur);
+          const nexts = localAdj[cur].filter(n => !visited.has(n));
+          if (nexts.length === 0) break;
+          cur = nexts[0];
+        }
+      }
+      lineSequences[color] = seq;
+    }
+  }
+  return {nodes, edges, nodeMap, adj, stationLines, lineSequences, lineNameMap, lineBadgeMap};
+}
+
+// 获取单程线的方向信息
+function getOneWayDirection(color, stationKey, lineSequences) {
+  const seq = lineSequences[color];
+  if (!seq || !seq.length) return null;
+  const idx = seq.indexOf(stationKey);
+  if (idx === -1) return null;
+  // 单程线只有一个方向：从始发站往后
+  if (idx < seq.length - 1) {
+    const nextStation = seq[idx + 1];
+    return { direction: 1, nextStation, terminal: seq[seq.length - 1] };
+  }
+  return null; // 终点站，无后续方向
+}
+
+function getNextTrains(lineColor, stationKey, direction, lineSequences) {
+  const seq = lineSequences[lineColor];
+  if (!seq || !seq.length) return [];
+  const idx = seq.indexOf(stationKey);
+  if (idx === -1) return [];
+
+  const now = getBeijingNow();
+  const currentMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const startDay = 7 * 60;
+  const endDay = 23 * 60;
+
+  // 单程线：只能从始发站方向来
+  if (isOneWayLine(lineColor)) {
+    // 如果当前站在始发站之前（按序列），说明不能从该方向来
+    const startKey = getOneWayStart(lineColor);
+    const startIdx = seq.indexOf(startKey);
+    // 单程线只能往一个方向走，travel 是从始发站到当前站的累计时间
+    const travel = (idx - startIdx) * 2;
+    if (currentMin < startDay) {
+      const arr = startDay + travel;
+      return [{departure: startDay, arrival: arr, wait: arr - currentMin}];
+    }
+    if (currentMin >= endDay) return [];
+    const hour = Math.floor(currentMin / 60);
+    const interval = getInterval(hour);
+    if (!interval) return [];
+    const minN = Math.ceil((currentMin - travel - startDay) / interval);
+    const trains = [];
+    for (let n = minN; n < minN + 6; n++) {
+      const dep = startDay + n * interval;
+      if (dep >= endDay) break;
+      const arr = dep + travel;
+      if (arr >= currentMin) trains.push({departure: dep, arrival: arr, wait: arr - currentMin});
+    }
+    return trains;
+  }
+
+  // 普通双向线
+  const travel = direction === 1 ? idx * 2 : (seq.length - 1 - idx) * 2;
+  if (currentMin < startDay) {
+    const arr = startDay + travel;
+    return [{departure: startDay, arrival: arr, wait: arr - currentMin}];
+  }
+  if (currentMin >= endDay) return [];
+  const hour = Math.floor(currentMin / 60);
+  const interval = getInterval(hour);
+  if (!interval) return [];
+  const minN = Math.ceil((currentMin - travel - startDay) / interval);
+  const trains = [];
+  for (let n = minN; n < minN + 6; n++) {
+    const dep = startDay + n * interval;
+    if (dep >= endDay) break;
+    const arr = dep + travel;
+    if (arr >= currentMin) trains.push({departure: dep, arrival: arr, wait: arr - currentMin});
+  }
+  return trains;
+}
+
+class PriorityQueue {
+  constructor(cmp) { this.heap = []; this.cmp = cmp || ((a,b) => a.dist < b.dist); }
+  push(v) { this.heap.push(v); this.heap.sort((a,b) => this.cmp(a,b) ? -1 : 1); }
+  pop() { return this.heap.shift(); }
+  isEmpty() { return !this.heap.length; }
+}
+
+function findRoute(startKey, endKey, adj, stationLines) {
+  if (startKey === endKey) return {path: [{station: startKey, line: null}], time: 0};
+  const startColors = Array.from(stationLines[startKey] || []);
+  if (!startColors.length) return null;
+  const pq = new PriorityQueue();
+  const dist = new Map();
+  const prev = new Map();
+  startColors.forEach(c => {
+    const k = startKey + '|' + c;
+    dist.set(k, 0);
+    pq.push({station: startKey, line: c, dist: 0});
+  });
+  while (!pq.isEmpty()) {
+    const cur = pq.pop();
+    const ck = cur.station + '|' + cur.line;
+    if ((dist.get(ck) || Infinity) < cur.dist) continue;
+    for (const nb of (adj[cur.station] || [])) {
+      if (nb.color !== cur.line) continue;
+      // 单程线检查：只能沿单向行驶
+      if (isOneWayLine(cur.line)) {
+        const seq = window._subwayGraph.lineSequences[cur.line];
+        const startIdx = seq.indexOf(getOneWayStart(cur.line));
+        const fromIdx = seq.indexOf(cur.station);
+        const toIdx = seq.indexOf(nb.node);
+        // 只能往索引增大的方向走（从始发站往后）
+        if (toIdx <= fromIdx) continue;
+      }
+      const nd = cur.dist + 2;
+      const nk = nb.node + '|' + cur.line;
+      if ((dist.get(nk) || Infinity) > nd) {
+        dist.set(nk, nd);
+        prev.set(nk, {station: cur.station, line: cur.line});
+        pq.push({station: nb.node, line: cur.line, dist: nd});
+      }
+    }
+    const colors = Array.from(stationLines[cur.station] || []);
+    for (const c of colors) {
+      if (c === cur.line) continue;
+      const nd = cur.dist + 5;
+      const nk = cur.station + '|' + c;
+      if ((dist.get(nk) || Infinity) > nd) {
+        dist.set(nk, nd);
+        prev.set(nk, {station: cur.station, line: cur.line});
+        pq.push({station: cur.station, line: c, dist: nd});
+      }
+    }
+  }
+  let bestLine = null, bestDist = Infinity;
+  for (const c of Array.from(stationLines[endKey] || [])) {
+    const k = endKey + '|' + c;
+    if (dist.has(k) && dist.get(k) < bestDist) { bestDist = dist.get(k); bestLine = c; }
+  }
+  if (!bestLine) return null;
+  const path = [];
+  let cur = {station: endKey, line: bestLine};
+  while (true) {
+    path.unshift(cur);
+    if (cur.station === startKey && startColors.includes(cur.line)) break;
+    const k = cur.station + '|' + cur.line;
+    const p = prev.get(k);
+    if (!p) break;
+    cur = p;
+  }
+  return {path, time: bestDist};
+}
+
+function getPerpPath(x1, y1, x2, y2, r) {
+  const dx = x2 - x1, dy = y2 - y1;
+  r = Math.min(r || 12, Math.abs(dx) / 2, Math.abs(dy) / 2) || 0;
+  const sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return `M ${x1} ${y1} L ${x2 - sx * r} ${y1} Q ${x2} ${y1} ${x2} ${y1 + sy * r} L ${x2} ${y2}`;
+  } else {
+    return `M ${x1} ${y1} L ${x1} ${y2 - sy * r} Q ${x1} ${y2} ${x1 + sx * r} ${y2} L ${x2} ${y2}`;
+  }
+}
+
+// ===== 站点弹窗 =====
+let activePopup = null;
+function showStationPopup(stationKey, x, y) {
+  const popup = document.getElementById('station-popup');
+  const {nodeMap, stationLines, lineSequences, lineNameMap} = window._subwayGraph;
+  const attr = nodeMap[stationKey];
+  const [cn, en] = getNodeName({attributes: attr});
+  const lines = Array.from(stationLines[stationKey] || []);
+  const isTransfer = lines.length > 1;
+
+  let html = `
+    <div class="popup-header">
+      <div>
+        <div class="popup-title">${cn}${isTransfer ? '<span class="popup-transfer-tag">换乘站</span>' : ''}</div>
+        ${en ? `<div class="popup-en">${en}</div>` : ''}
+      </div>
+      <button class="popup-close" onclick="closeStationPopup()">✕</button>
+    </div>
+    <div class="popup-body">
+  `;
+
+  lines.forEach(color => {
+    const seq = lineSequences[color];
+    if (!seq || !seq.length) return;
+    const idx = seq.indexOf(stationKey);
+    const lineName = lineNameMap[color] || '未知线路';
+    const isOneWay = isOneWayLine(color);
+
+    if (isOneWay) {
+      // 单程线：只有一个方向（从始发站往后）
+      const startKey = getOneWayStart(color);
+      const startIdx = seq.indexOf(startKey);
+      const terminal = seq[seq.length - 1];
+      const [terminalCn] = getNodeName({attributes: nodeMap[terminal]});
+
+      if (idx < seq.length - 1) {
+        // 不是终点站，有后续方向
+        const nextStation = seq[idx + 1];
+        const [nextCn] = getNodeName({attributes: nodeMap[nextStation]});
+        const trains = getNextTrains(color, stationKey, 1, lineSequences);
+
+        html += `<div class="popup-section-title">${lineName} · 往 ${terminalCn} <span style="font-size:0.65rem;color:#a08050;margin-left:6px;">(单程线)</span></div>`;
+        if (trains.length > 0) {
+          const mins = Math.ceil(trains[0].wait);
+          html += `
+            <div class="popup-line-item" onclick="openLineDrawer('${color}')">
+              <div class="popup-line-badge" style="background:${color}">${lineName.replace(/[^0-9]/g, '') || 'L'}</div>
+              <div class="popup-line-info">
+                <div class="popup-line-name">${lineName}</div>
+                <div class="popup-line-dir">开往 ${terminalCn} 方向</div>
+              </div>
+              <div class="popup-time">
+                <span class="popup-time-badge">${mins} 分</span>
+                <div class="popup-time-detail">${formatTime(Math.ceil(trains[0].arrival))} 到站</div>
+              </div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="popup-line-item">
+              <div class="popup-line-badge" style="background:${color}">${lineName.replace(/[^0-9]/g, '') || 'L'}</div>
+              <div class="popup-line-info">
+                <div class="popup-line-name">${lineName}</div>
+                <div class="popup-line-dir">开往 ${terminalCn} 方向</div>
+              </div>
+              <div class="popup-time">
+                <span class="popup-time-badge off">已停运</span>
+              </div>
+            </div>
+          `;
+        }
+      } else {
+        // 终点站
+        html += `<div class="popup-section-title">${lineName} · 终点站</div>`;
+        html += `
+          <div class="popup-line-item">
+            <div class="popup-line-badge" style="background:${color}">${lineName.replace(/[^0-9]/g, '') || 'L'}</div>
+            <div class="popup-line-info">
+              <div class="popup-line-name">${lineName}</div>
+              <div class="popup-line-dir">${cn} 为终点站</div>
+            </div>
+            <div class="popup-time">
+              <span class="popup-time-badge off">终点站</span>
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      // 普通双向线：两个方向
+      if (idx > 0) {
+        const prevStation = seq[idx - 1];
+        const [prevCn] = getNodeName({attributes: nodeMap[prevStation]});
+        const trains0 = getNextTrains(color, stationKey, 0, lineSequences);
+        html += `<div class="popup-section-title">${lineName} · 往 ${prevCn}</div>`;
+        if (trains0.length > 0) {
+          const mins = Math.ceil(trains0[0].wait);
+          html += `
+            <div class="popup-line-item" onclick="openLineDrawer('${color}')">
+              <div class="popup-line-badge" style="background:${color}">${lineName.replace(/[^0-9]/g, '') || 'L'}</div>
+              <div class="popup-line-info">
+                <div class="popup-line-name">${lineName}</div>
+                <div class="popup-line-dir">开往 ${prevCn} 方向</div>
+              </div>
+              <div class="popup-time">
+                <span class="popup-time-badge">${mins} 分</span>
+                <div class="popup-time-detail">${formatTime(Math.ceil(trains0[0].arrival))} 到站</div>
+              </div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="popup-line-item">
+              <div class="popup-line-badge" style="background:${color}">${lineName.replace(/[^0-9]/g, '') || 'L'}</div>
+              <div class="popup-line-info">
+                <div class="popup-line-name">${lineName}</div>
+                <div class="popup-line-dir">开往 ${prevCn} 方向</div>
+              </div>
+              <div class="popup-time">
+                <span class="popup-time-badge off">已停运</span>
+              </div>
+            </div>
+          `;
+        }
+      }
+      if (idx < seq.length - 1) {
+        const nextStation = seq[idx + 1];
+        const [nextCn] = getNodeName({attributes: nodeMap[nextStation]});
+        const trains1 = getNextTrains(color, stationKey, 1, lineSequences);
+        html += `<div class="popup-section-title">${lineName} · 往 ${nextCn}</div>`;
+        if (trains1.length > 0) {
+          const mins = Math.ceil(trains1[0].wait);
+          html += `
+            <div class="popup-line-item" onclick="openLineDrawer('${color}')">
+              <div class="popup-line-badge" style="background:${color}">${lineName.replace(/[^0-9]/g, '') || 'L'}</div>
+              <div class="popup-line-info">
+                <div class="popup-line-name">${lineName}</div>
+                <div class="popup-line-dir">开往 ${nextCn} 方向</div>
+              </div>
+              <div class="popup-time">
+                <span class="popup-time-badge">${mins} 分</span>
+                <div class="popup-time-detail">${formatTime(Math.ceil(trains1[0].arrival))} 到站</div>
+              </div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="popup-line-item">
+              <div class="popup-line-badge" style="background:${color}">${lineName.replace(/[^0-9]/g, '') || 'L'}</div>
+              <div class="popup-line-info">
+                <div class="popup-line-name">${lineName}</div>
+                <div class="popup-line-dir">开往 ${nextCn} 方向</div>
+              </div>
+              <div class="popup-time">
+                <span class="popup-time-badge off">已停运</span>
+              </div>
+            </div>
+          `;
+        }
+      }
+    }
+  });
+
+  html += '</div>';
+  popup.innerHTML = html;
+  popup.style.display = 'block';
+
+  // 定位弹窗
+  const container = document.getElementById('map-container');
+  const rect = container.getBoundingClientRect();
+  const svg = container.querySelector('svg');
+  const vb = svg.getAttribute('viewBox').split(' ').map(Number);
+  const scaleX = rect.width / vb[2];
+  const scaleY = rect.height / vb[3];
+  const screenX = (x - vb[0]) * scaleX;
+  const screenY = (y - vb[1]) * scaleY;
+
+  let left = screenX + 20;
+  let top = screenY - 50;
+  if (left + 380 > rect.width) left = screenX - 400;
+  if (top + 300 > rect.height) top = screenY - 250;
+  if (top < 60) top = 60;
+  if (left < 10) left = 10;
+
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+  activePopup = popup;
+}
+
+function closeStationPopup() {
+  const popup = document.getElementById('station-popup');
+  popup.style.display = 'none';
+  activePopup = null;
+}
+
+function renderMap(data) {
+  const container = document.getElementById('map-container');
+  container.innerHTML = '';
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.style.width = '100%'; svg.style.height = '100%';
+  container.appendChild(svg);
+
+  const graph = buildGraph(data);
+  const {nodes, edges, nodeMap, adj, stationLines, lineSequences, lineNameMap, lineBadgeMap} = graph;
+  window._subwayGraph = graph;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  nodes.forEach(n => {
+    const {x, y} = n.attributes;
+    minX = Math.min(minX, x); minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+  });
+  const pad = 120;
+  svg.setAttribute('viewBox', `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  // 背景
+  const bg = document.createElementNS(svgNS, 'rect');
+  bg.setAttribute('x', minX - pad); bg.setAttribute('y', minY - pad);
+  bg.setAttribute('width', maxX - minX + pad * 2); bg.setAttribute('height', maxY - minY + pad * 2);
+  bg.setAttribute('fill', '#c8bfa0');
+  svg.appendChild(bg);
+
+  // 区域标签
+  const regions = [
+    {name: '蒙德', x: 300, y: -200}, {name: '璃月', x: 100, y: 180},
+    {name: '须弥', x: -300, y: 200}, {name: '枫丹', x: -80, y: -220},
+    {name: '纳塔', x: -600, y: 250}, {name: '稻妻', x: 550, y: 220}
+  ];
+  regions.forEach(r => {
+    const t = document.createElementNS(svgNS, 'text');
+    t.setAttribute('x', r.x); t.setAttribute('y', r.y);
+    t.textContent = r.name;
+    t.setAttribute('fill', '#7a5a3a');
+    t.setAttribute('font-size', '24');
+    t.setAttribute('font-weight', 'bold');
+    t.setAttribute('opacity', '0.12');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('font-family', 'Noto Serif SC, serif');
+    svg.appendChild(t);
+  });
+
+  // 绘制线路
+  edges.forEach(e => {
+    const src = nodeMap[e.source], tgt = nodeMap[e.target];
+    if (!src || !tgt) return;
+    const color = getEdgeColor(e.attributes);
+    let x1 = src.x, y1 = src.y, x2 = tgt.x, y2 = tgt.y;
+    if (e.attributes.parallelIndex && e.attributes.parallelIndex !== 0) {
+      const dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const off = e.attributes.parallelIndex * 3.5;
+      x1 += nx * off; y1 += ny * off; x2 += nx * off; y2 += ny * off;
+    }
+    let d = '';
+    if (e.attributes.type === 'perpendicular') {
+      d = getPerpPath(x1, y1, x2, y2, e.attributes.perpendicular?.roundCornerFactor || 12);
+    } else {
+      d = `M ${x1} ${y1} L ${x2} ${y2}`;
+    }
+    const p = document.createElementNS(svgNS, 'path');
+    p.setAttribute('d', d); p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', '3.5'); p.setAttribute('fill', 'none');
+    p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+    p.setAttribute('opacity', '0.9');
+    svg.appendChild(p);
+  });
+
+  // 绘制站点
+  nodes.forEach(node => {
+    const attr = node.attributes;
+    const {x, y} = attr;
+    const type = attr.type;
+    const isTransfer = type === 'bjsubway-int';
+    const isBasic = type === 'bjsubway-basic' || type === 'shmetro-basic';
+    if (isBasic || isTransfer) {
+      const conf = attr[type] || {};
+      const [nameCn, nameEn] = conf.names || ['', ''];
+      const offX = conf.nameOffsetX || 'right';
+      const offY = conf.nameOffsetY || 'top';
+      const g = document.createElementNS(svgNS, 'g');
+      g.style.cursor = 'pointer';
+      g.onclick = (ev) => {
+        ev.stopPropagation();
+        showStationPopup(node.key, x, y);
+      };
+
+      g.onmouseenter = () => {
+        const circles = g.querySelectorAll('circle');
+        circles.forEach(c => {
+          c.setAttribute('r', parseFloat(c.getAttribute('r')) + 2);
+          c.style.transition = 'r 0.2s';
+        });
+      };
+      g.onmouseleave = () => {
+        const circles = g.querySelectorAll('circle');
+        if (isTransfer) {
+          circles[0].setAttribute('r', 8);
+          circles[1].setAttribute('r', 4);
+        } else {
+          circles[0].setAttribute('r', 5);
+        }
+      };
+
+      if (isTransfer) {
+        const outer = document.createElementNS(svgNS, 'circle');
+        outer.setAttribute('cx', x); outer.setAttribute('cy', y); outer.setAttribute('r', 8);
+        outer.setAttribute('fill', '#fff');
+        outer.setAttribute('stroke', '#2c3e44');
+        outer.setAttribute('stroke-width', '2.5');
+        g.appendChild(outer);
+        const inner = document.createElementNS(svgNS, 'circle');
+        inner.setAttribute('cx', x); inner.setAttribute('cy', y); inner.setAttribute('r', 4);
+        inner.setAttribute('fill', '#2c3e44');
+        g.appendChild(inner);
+      } else {
+        const c = document.createElementNS(svgNS, 'circle');
+        c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 5);
+        c.setAttribute('fill', '#2d3748');
+        c.setAttribute('stroke', '#cbd5e1');
+        c.setAttribute('stroke-width', '1.5');
+        g.appendChild(c);
+      }
+
+      let dx = 10, dy = -10;
+      if (offX === 'left') dx = -10;
+      if (offX === 'right') dx = 10;
+      if (offX === 'middle') dx = 0;
+      if (offY === 'top') dy = -10;
+      if (offY === 'bottom') dy = 14;
+      if (offY === 'middle') dy = 4;
+
+      const text = document.createElementNS(svgNS, 'text');
+      text.setAttribute('x', x + dx); text.setAttribute('y', y + dy);
+      text.textContent = nameCn;
+      text.setAttribute('font-size', '11');
+      text.setAttribute('font-weight', '600');
+      text.setAttribute('fill', '#1e2a2f');
+      text.setAttribute('stroke', '#fff6e8');
+      text.setAttribute('stroke-width', '0.5');
+      text.setAttribute('paint-order', 'stroke');
+      text.setAttribute('dominant-baseline', 'hanging');
+      if (offX === 'middle') text.setAttribute('text-anchor', 'middle');
+      else if (offX === 'left') text.setAttribute('text-anchor', 'end');
+      g.appendChild(text);
+
+      if (nameEn) {
+        const en = document.createElementNS(svgNS, 'text');
+        en.setAttribute('x', x + dx); en.setAttribute('y', y + dy + 12);
+        en.textContent = nameEn;
+        en.setAttribute('font-size', '7.5');
+        en.setAttribute('fill', '#5a6b72');
+        en.setAttribute('dominant-baseline', 'hanging');
+        if (offX === 'middle') en.setAttribute('text-anchor', 'middle');
+        else if (offX === 'left') en.setAttribute('text-anchor', 'end');
+        g.appendChild(en);
+      }
+
+      const title = document.createElementNS(svgNS, 'title');
+      title.textContent = nameCn + (nameEn ? '\n' + nameEn : '') + (isTransfer ? ' [换乘站]' : '');
+      g.appendChild(title);
+      svg.appendChild(g);
+    } else if (type.includes('line-badge') || type === 'berlin-s-bahn-line-badge') {
+      const badge = attr[type] || {};
+      const g = document.createElementNS(svgNS, 'g');
+      const circ = document.createElementNS(svgNS, 'circle');
+      circ.setAttribute('cx', x); circ.setAttribute('cy', y); circ.setAttribute('r', 14);
+      circ.setAttribute('fill', badge.color?.[2] || '#ccc');
+      circ.setAttribute('stroke', '#fff'); circ.setAttribute('stroke-width', '2');
+      g.appendChild(circ);
+      const txt = document.createElementNS(svgNS, 'text');
+      txt.setAttribute('x', x); txt.setAttribute('y', y);
+      txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('dominant-baseline', 'middle');
+      txt.textContent = badge.num || (badge.names ? badge.names[0] : '?');
+      txt.setAttribute('fill', badge.color?.[3] || '#fff');
+      txt.setAttribute('font-weight', 'bold'); txt.setAttribute('font-size', '12');
+      g.appendChild(txt);
+      svg.appendChild(g);
+    } else if (type === 'facilities') {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', x - 8); rect.setAttribute('y', y - 4);
+      rect.setAttribute('width', 16); rect.setAttribute('height', 8);
+      rect.setAttribute('fill', '#6b5a4c'); rect.setAttribute('rx', '2');
+      svg.appendChild(rect);
+    }
+  });
+
+  svg.addEventListener('click', (e) => {
+    if (e.target === svg || e.target === bg) closeStationPopup();
+  });
+
+  return svg;
+}
+
+let currentCleanup = null;
+function attachPanZoom(svgElem) {
+  if (currentCleanup) currentCleanup();
+  let isPan = false, start = {x:0,y:0}, vb = {x:0,y:0,w:0,h:0};
+  const getVB = () => svgElem.getAttribute('viewBox').split(' ').map(Number);
+  const setVB = (arr) => svgElem.setAttribute('viewBox', arr.join(' '));
+  const onWheel = (e) => {
+    e.preventDefault();
+    const rect = svgElem.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    let [x,y,w,h] = getVB();
+    const factor = e.deltaY < 0 ? 0.9 : 1.1;
+    const nw = w * factor, nh = h * factor;
+    const fx = mx / rect.width, fy = my / rect.height;
+    setVB([x + (w - nw) * fx, y + (h - nh) * fy, nw, nh]);
+    if (activePopup) closeStationPopup();
+  };
+  const onMouseDown = (e) => {
+    if (e.button !== 0) return;
+    isPan = true;
+    start = {x: e.clientX, y: e.clientY};
+    let [x,y,w,h] = getVB();
+    vb = {x,y,w,h};
+    svgElem.style.cursor = 'grabbing';
+    if (activePopup) closeStationPopup();
+  };
+  const onMouseMove = (e) => {
+    if (!isPan) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    const sx = vb.w / svgElem.clientWidth, sy = vb.h / svgElem.clientHeight;
+    setVB([vb.x - dx * sx, vb.y - dy * sy, vb.w, vb.h]);
+    start = {x: e.clientX, y: e.clientY};
+    let [x,y,w,h] = getVB();
+    vb = {x,y,w,h};
+  };
+  const onMouseUp = () => { isPan = false; svgElem.style.cursor = 'grab'; };
+  svgElem.addEventListener('wheel', onWheel, {passive: false});
+  svgElem.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+  svgElem.style.cursor = 'grab';
+  currentCleanup = () => {
+    svgElem.removeEventListener('wheel', onWheel);
+    svgElem.removeEventListener('mousedown', onMouseDown);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
+}
+
+function resetView(data) {
+  const svg = document.querySelector('#map-container svg');
+  if (!svg) return;
+  const nodes = data.graph.nodes.filter(n => n.attributes.visible);
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  nodes.forEach(n => { const {x,y}=n.attributes; minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x); maxY=Math.max(maxY,y); });
+  const pad = 120;
+  svg.setAttribute('viewBox', `${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);
+}
+
+let drawerInterval = null;
+function initUI() {
+  const startSel = document.getElementById('start-station');
+  const endSel = document.getElementById('end-station');
+  startSel.innerHTML = '<option value="">选择起点</option>';
+  endSel.innerHTML = '<option value="">选择终点</option>';
+  const {nodes} = window._subwayGraph;
+  const stations = nodes.filter(n => {
+    const t = n.attributes.type;
+    return t === 'bjsubway-basic' || t === 'bjsubway-int' || t === 'shmetro-basic';
+  }).sort((a,b) => getNodeName(a)[0].localeCompare(getNodeName(b)[0], 'zh-CN'));
+  stations.forEach(s => {
+    const [cn] = getNodeName(s);
+    const o1 = document.createElement('option'); o1.value = s.key; o1.textContent = cn; startSel.appendChild(o1);
+    const o2 = document.createElement('option'); o2.value = s.key; o2.textContent = cn; endSel.appendChild(o2);
+  });
+  document.getElementById('search-route').onclick = () => {
+    if (!startSel.value || !endSel.value) { alert('请选择起点和终点'); return; }
+    searchRoute(startSel.value, endSel.value);
+  };
+  document.getElementById('toggle-route').onclick = () => {
+    const p = document.getElementById('route-panel');
+    p.classList.toggle('collapsed');
+  };
+  document.getElementById('close-drawer').onclick = () => {
+    document.getElementById('line-drawer').classList.remove('open');
+    if (drawerInterval) clearInterval(drawerInterval);
+  };
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderLineDrawerContent(parseInt(btn.dataset.dir));
+    };
+  });
+}
+
+function renderLegend() {
+  const {lineNameMap} = window._subwayGraph;
+  const container = document.getElementById('legend-panel');
+  const staticItems = Array.from(container.children).slice(0, 2);
+  container.innerHTML = '';
+  staticItems.forEach(el => container.appendChild(el));
+  Object.entries(lineNameMap).forEach(([color, name]) => {
+    const span = document.createElement('span');
+    span.className = 'legend-item';
+    span.dataset.color = color;
+    const isOneWay = isOneWayLine(color);
+    span.innerHTML = `<i class="legend-color" style="background:${color};"></i> ${name}${isOneWay ? ' <span style="font-size:0.65rem;color:#a08050;">(单程)</span>' : ''}`;
+    span.onclick = () => openLineDrawer(color);
+    container.appendChild(span);
+  });
+}
+
+function openLineDrawer(color) {
+  const {lineNameMap, lineSequences, nodeMap} = window._subwayGraph;
+  const seq = lineSequences[color];
+  if (!seq || !seq.length) return;
+  window._currentLine = color;
+  const isOneWay = isOneWayLine(color);
+  document.getElementById('drawer-title').textContent = (lineNameMap[color] || '未知线路') + (isOneWay ? ' (单程线)' : '');
+  document.getElementById('drawer-color').style.background = color;
+
+  if (isOneWay) {
+    // 单程线：只有一个方向标签
+    const terminal = seq[seq.length - 1];
+    const terminalName = getNodeName({attributes: nodeMap[terminal]})[0];
+    document.getElementById('tab-end-0').textContent = terminalName;
+    document.getElementById('tab-end-1').textContent = '--';
+    document.querySelectorAll('.tab-btn')[0].style.display = 'flex';
+    document.querySelectorAll('.tab-btn')[1].style.display = 'none';
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+    renderLineDrawerContent(0);
+  } else {
+    // 双向线：两个方向标签
+    const end0 = getNodeName({attributes: nodeMap[seq[0]]})[0];
+    const end1 = getNodeName({attributes: nodeMap[seq[seq.length-1]]})[0];
+    document.getElementById('tab-end-0').textContent = end0;
+    document.getElementById('tab-end-1').textContent = end1;
+    document.querySelectorAll('.tab-btn').forEach(b => b.style.display = 'flex');
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+    renderLineDrawerContent(0);
+  }
+
+  document.getElementById('line-drawer').classList.add('open');
+  if (drawerInterval) clearInterval(drawerInterval);
+  drawerInterval = setInterval(() => {
+    const active = document.querySelector('.tab-btn.active');
+    if (active && window._currentLine) renderLineDrawerContent(parseInt(active.dataset.dir));
+  }, 10000);
+}
+
+function renderLineDrawerContent(direction) {
+  const color = window._currentLine;
+  const {lineSequences, nodeMap} = window._subwayGraph;
+  const seq = lineSequences[color];
+  const container = document.getElementById('drawer-content');
+  container.innerHTML = '';
+  const isOneWay = isOneWayLine(color);
+
+  seq.forEach((key, idx) => {
+    const attr = nodeMap[key];
+    const [cn, en] = getNodeName({attributes: attr});
+    let trains;
+    if (isOneWay) {
+      // 单程线：只有一个方向
+      trains = getNextTrains(color, key, 1, lineSequences);
+    } else {
+      trains = getNextTrains(color, key, direction, lineSequences);
+    }
+    const row = document.createElement('div');
+    row.className = 'drawer-station-row';
+    const info = document.createElement('div');
+    info.className = 'drawer-station-info';
+    info.innerHTML = `<div class="drawer-station-name">${cn}</div>${en ? `<div class="drawer-station-en">${en}</div>` : ''}`;
+    const time = document.createElement('div');
+    time.className = 'drawer-station-time';
+    if (trains.length > 0) {
+      const mins = Math.ceil(trains[0].wait);
+      time.innerHTML = `<span class="drawer-time-badge">${mins} 分</span><div class="drawer-time-detail">${formatTime(Math.ceil(trains[0].arrival))} 到站</div>`;
+    } else {
+      time.innerHTML = `<span class="drawer-time-badge off">已停运</span>`;
+    }
+    row.appendChild(info);
+    row.appendChild(time);
+    container.appendChild(row);
+  });
+}
+
+function searchRoute(startKey, endKey) {
+  const {adj, stationLines, lineSequences, nodeMap, lineNameMap} = window._subwayGraph;
+  const result = findRoute(startKey, endKey, adj, stationLines);
+  const container = document.getElementById('route-result');
+  if (!result) {
+    container.innerHTML = '<div class="route-empty">未找到可行路线，请尝试其他站点</div>';
+    return;
+  }
+  const segments = [];
+  let cur = null;
+  result.path.forEach((p, i) => {
+    if (i === 0) {
+      cur = {line: p.line, stations: [p.station]};
+    } else {
+      if (p.line === cur.line) cur.stations.push(p.station);
+      else { segments.push(cur); cur = {line: p.line, stations: [p.station]}; }
+    }
+  });
+  if (cur) segments.push(cur);
+
+  const now = getBeijingNow();
+  let currentMin = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
+  const schedule = [];
+  segments.forEach((seg, idx) => {
+    const line = seg.line;
+    const sts = seg.stations;
+    const from = sts[0], to = sts[sts.length-1];
+    const count = sts.length - 1;
+    const seq = lineSequences[line];
+    const isOneWay = isOneWayLine(line);
+    let dir, terminalName;
+
+    if (isOneWay) {
+      // 单程线：方向固定
+      dir = 1;
+      const terminal = seq[seq.length - 1];
+      terminalName = getNodeName({attributes: nodeMap[terminal]})[0];
+    } else {
+      const idxFrom = seq.indexOf(from), idxTo = seq.indexOf(to);
+      dir = idxTo > idxFrom ? 1 : 0;
+      const terminal = dir === 1 ? seq[seq.length-1] : seq[0];
+      terminalName = getNodeName({attributes: nodeMap[terminal]})[0];
+    }
+
+    const trains = getNextTrains(line, from, dir, lineSequences);
+    let boardTime, waitMin;
+    if (trains.length > 0) {
+      boardTime = trains[0].arrival;
+      waitMin = Math.max(0, Math.ceil(boardTime - currentMin));
+    } else {
+      boardTime = currentMin; waitMin = 0;
+    }
+    schedule.push({
+      type: 'board', line, lineName: lineNameMap[line] || '未知线路',
+      station: from, stationName: getNodeName({attributes: nodeMap[from]})[0],
+      direction: terminalName, wait: waitMin, boardTime,
+      isOneWay: isOneWay
+    });
+    const rideTime = count * 2;
+    const arriveTime = boardTime + rideTime;
+    schedule.push({
+      type: 'ride', line, lineName: lineNameMap[line] || '未知线路',
+      from, fromName: getNodeName({attributes: nodeMap[from]})[0],
+      to, toName: getNodeName({attributes: nodeMap[to]})[0],
+      count, rideTime, arriveTime
+    });
+    currentMin = arriveTime;
+    if (idx < segments.length - 1) {
+      currentMin += 5;
+      schedule.push({type: 'transfer', station: to, stationName: getNodeName({attributes: nodeMap[to]})[0], wait: 5});
+    }
+  });
+
+  const lastArrive = schedule[schedule.length-1].arriveTime;
+  const totalTime = Math.ceil(lastArrive - (now.getHours()*60 + now.getMinutes() + now.getSeconds()/60));
+  const totalStations = schedule.filter(s=>s.type==='ride').reduce((a,s)=>a+s.count, 0);
+  const transferCount = schedule.filter(s=>s.type==='transfer').length;
+
+  let html = `<div class="route-summary">
+    <div class="summary-item"><span class="big">${totalTime}</span><small>分钟</small></div>
+    <div class="summary-item"><span>${totalStations}</span><small>站</small></div>
+    <div class="summary-item"><span>${transferCount}</span><small>换乘</small></div>
+    <div class="summary-item"><span>${formatTime(Math.ceil(lastArrive))}</span><small>到达</small></div>
+  </div><div class="route-steps">`;
+
+  let stepDelay = 0;
+  schedule.forEach((s, i) => {
+    stepDelay += 0.08;
+    if (s.type === 'board') {
+      const oneWayTag = s.isOneWay ? '<span style="font-size:0.7rem;color:#a08050;margin-left:4px;">(单程)</span>' : '';
+      html += `<div class="step step-board" style="animation-delay:${stepDelay}s">
+        <div class="step-icon" style="border-color:${s.line}"></div>
+        <div class="step-body">
+          <div class="step-title">在 <b>${s.stationName}</b> 乘坐 <b style="color:${s.line}">${s.lineName}</b>${oneWayTag}（往${s.direction}）</div>
+          <div class="step-meta">预计等待 <b>${s.wait} 分</b> · ${formatTime(Math.ceil(s.boardTime))} 到站</div>
+        </div>
+      </div>`;
+    } else if (s.type === 'ride') {
+      html += `<div class="step step-ride" style="animation-delay:${stepDelay}s">
+        <div class="step-line-vert" style="background:${s.line}"></div>
+        <div class="step-body">
+          <div class="step-meta">经过 ${s.count} 站，约 ${s.rideTime} 分钟</div>
+          <div class="step-title">到达 <b>${s.toName}</b> <span style="opacity:0.6;font-size:0.75rem;">${formatTime(Math.ceil(s.arriveTime))}</span></div>
+        </div>
+      </div>`;
+    } else if (s.type === 'transfer') {
+      html += `<div class="step step-transfer" style="animation-delay:${stepDelay}s">
+        <div class="step-icon">↻</div>
+        <div class="step-body">
+          <div class="step-title">在 <b>${s.stationName}</b> 换乘</div>
+          <div class="step-meta">站内换乘约 ${s.wait} 分钟</div>
+        </div>
+      </div>`;
+    }
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function loadAndRender(data) {
+  const svg = renderMap(data);
+  attachPanZoom(svg);
+  initUI();
+  renderLegend();
+  document.getElementById('zoom-in').onclick = () => {
+    const s = document.querySelector('#map-container svg');
+    if (!s) return;
+    let [x,y,w,h] = s.getAttribute('viewBox').split(' ').map(Number);
+    let nw=w*0.85, nh=h*0.85;
+    s.setAttribute('viewBox', `${x+(w-nw)/2} ${y+(h-nh)/2} ${nw} ${nh}`);
+  };
+  document.getElementById('zoom-out').onclick = () => {
+    const s = document.querySelector('#map-container svg');
+    if (!s) return;
+    let [x,y,w,h] = s.getAttribute('viewBox').split(' ').map(Number);
+    let nw=w*1.18, nh=h*1.18;
+    s.setAttribute('viewBox', `${x+(w-nw)/2} ${y+(h-nh)/2} ${nw} ${nh}`);
+  };
+  document.getElementById('reset-view').onclick = () => resetView(data);
+}
+
+loadAndRender(defaultSubwayData);
+document.getElementById('jsonUpload').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try { loadAndRender(JSON.parse(ev.target.result)); }
+    catch(err) { alert('JSON解析失败: ' + err.message); }
+  };
+  reader.readAsText(file);
+});
+setInterval(() => {
+  const now = getBeijingNow();
+  document.getElementById('clock').textContent = '北京时间 ' + now.toTimeString().slice(0,8);
+}, 1000);
+
+</script>
+</body>
+</html>
